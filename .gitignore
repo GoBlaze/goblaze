@@ -4,6 +4,9 @@
 *.dll
 *.so
 *.dylib
+*.a
+*.o
+
 
 bin
 *.test
