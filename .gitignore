@@ -1,7 +1,14 @@
 .vscode/
 
-bin
+*.exe
+*.dll
+*.so
+*.dylib
 
+bin
+*.test
+*.out
+.glide/
 vendor
 
-main.go
+.bin
