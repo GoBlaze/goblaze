@@ -56,7 +56,7 @@ func SetResponse(ctx *goblaze.Ctx) error {
 }
 
 func YouGay(ctx *goblaze.Ctx) error {
-	if _, err := ctx.Write([]byte("<h1>lol</h1>")); err != nil {
+	if err := ctx.App().HttpResponse(ctx, []byte("<h1>lol</h1>")); err != nil {
 		if err != nil {
 			logrus.Error(err)
 			return err

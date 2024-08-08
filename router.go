@@ -1,6 +1,8 @@
 package goblaze
 
 import (
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/valyala/fasthttp"
@@ -91,7 +93,6 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 // handleRequest finds the handler for the request.
 func (r *Router) handleRequest(ctx *Ctx) Handler {
-
 	method := string(ctx.Method())
 	path := string(ctx.Path())
 
@@ -101,7 +102,23 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 
 	root := r.trees[method]
 	if root == nil {
-		ctx.Error("Method not allowed", fasthttp.StatusMethodNotAllowed)
+		// If no handler is found for the method, handle the case properly
+		if r.HandleMethodNotAllowed {
+			allow := r.allowed(path, method)
+			if len(allow) > 0 {
+				ctx.response.Header.Set("Allow", allow)
+				if r.MethodNotAllowed != nil {
+					r.MethodNotAllowed(ctx.RequestCtx)
+				} else {
+					ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+					ctx.SetContentType("text/plain")
+					ctx.SetBodyString(fasthttp.StatusMessage(fasthttp.StatusMethodNotAllowed))
+				}
+				return nil
+			}
+		}
+		// If still no handler is found, return 404 Not Found
+		ctx.Error("Method not allowed", fasthttp.StatusNotFound)
 		return nil
 	}
 
@@ -178,41 +195,45 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
-	if path == "*" || path == "/*" { // server-wide
+	allowed := make([]string, 0, 10) // Increase capacity to avoid frequent reallocations
+
+	if path == "*" || path == "/*" { // Server-wide
 		for method := range r.trees {
 			if method == "OPTIONS" {
 				continue
 			}
-
-			// add request method to list of allowed methods
-			if len(allow) == 0 {
-				allow = method
-			} else {
-				allow += ", " + method
-			}
+			allowed = append(allowed, method)
 		}
-	} else { // specific path
+	} else { // Specific path
 		for method := range r.trees {
-			// Skip the requested method - we already tried this one
 			if method == reqMethod || method == "OPTIONS" {
 				continue
 			}
-
 			handle, _ := r.trees[method].getValue(path)
 			if handle != nil {
-				// add request method to list of allowed methods
-				if len(allow) == 0 {
-					allow = method
-				} else {
-					allow += ", " + method
-				}
+				allowed = append(allowed, method)
 			}
 		}
 	}
-	if len(allow) > 0 {
-		allow += ", OPTIONS"
+
+	// Add OPTIONS method to the allowed list
+	if len(allowed) > 0 {
+		allowed = append(allowed, "OPTIONS")
 	}
-	return
+
+	// Sort methods
+	sort.Strings(allowed)
+
+	// Use strings.Builder for efficient concatenation
+	var builder strings.Builder
+	for i, method := range allowed {
+		if i > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString(method)
+	}
+
+	return builder.String()
 }
 
 func (r *Router) Handle(method, path string, handle Handler) {

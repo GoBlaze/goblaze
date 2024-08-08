@@ -24,9 +24,7 @@ var requestCtxPool = sync.Pool{
 
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get().(*Ctx)
-	actx.RequestCtx = ctx
-
-	// atomic.StoreInt32(&actx.searchingOnAttachedCtx, 0)
+	actx.RequestCtx = ctx // Set the incoming RequestCtx
 	return actx
 }
 
@@ -42,6 +40,9 @@ type Ctx struct {
 	next                   bool
 	skipView               bool
 	searchingOnAttachedCtx int32
+	index                  int
+
+	handlers []func(*Ctx)
 
 	*fasthttp.RequestCtx
 }
@@ -50,9 +51,9 @@ func ReleaseRequestCtx(ctx *Ctx) {
 	ctx.RequestCtx = nil
 	ctx.next = false
 	ctx.skipView = false
-	ctx.pnames = [32]string{}
-	ctx.pvalues = [32]string{}
+
 	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
+
 	requestCtxPool.Put(ctx)
 }
 
@@ -121,6 +122,18 @@ func (c *Ctx) SetHeader(key, value string) {
 }
 
 func (c *Ctx) Cookie(cookie *fasthttp.Cookie) {
+
+}
+
+func (c *Ctx) Context() *fasthttp.RequestCtx {
+	return c.RequestCtx
+}
+
+func (c *Ctx) Next() { // begin for skip all middlewares
+	c.index++
+	if c.index < len(c.handlers) {
+		c.handlers[c.index](c)
+	}
 
 }
 
