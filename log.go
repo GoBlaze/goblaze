@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,18 +58,27 @@ func init() {
 
 func NewLog() *logrusLogger {
 	logger := logrus.New()
-	setupPrettyLogrus(logger)
-	return &logrusLogger{Logger: logger}
-}
-
-func setupPrettyLogrus(logger *logrus.Logger) {
+	logger.SetLevel(logrus.DebugLevel)
+	logrus.SetOutput(colorable.NewColorableStdout())
 	logger.SetReportCaller(true)
 	logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:            isatty.IsTerminal(os.Stdout.Fd()),
+		TimestampFormat:        "2006-01-02 15:04:05",
+		DisableTimestamp:       false,
+		DisableLevelTruncation: false,
+		PadLevelText:           true,
+		QuoteEmptyFields:       false,
+		FieldMap:               logrus.FieldMap{},
+
+		FullTimestamp: true,
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			_, file := filepath.Split(f.File)
 			return "", fmt.Sprintf("%s:%d", file, f.Line)
 		},
+		EnvironmentOverrideColors: true,
 	})
-	logger.SetOutput(os.Stdout)
-	logger.SetLevel(logrus.DebugLevel)
+
+	return &logrusLogger{
+		Logger: logger,
+	}
 }

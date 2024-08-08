@@ -3,6 +3,8 @@ module github.com/GoBlaze/goblaze
 go 1.22.5
 
 require (
+	github.com/mattn/go-colorable v0.1.13
+	github.com/mattn/go-isatty v0.0.20
 	github.com/sirupsen/logrus v1.9.3
 	github.com/valyala/fasthttp v1.55.0
 )

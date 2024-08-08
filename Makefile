@@ -34,3 +34,7 @@ run: build
 
 clean:
 	rm -f $(BINARY) $(C_OBJ) $(C_LIB)
+
+
+bench:
+	@go test -benchmem   -timeout 10s -bench . -benchmem ./benchmarks 

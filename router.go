@@ -1,6 +1,35 @@
 package goblaze
 
-import "github.com/valyala/fasthttp"
+import (
+	"github.com/valyala/fasthttp"
+)
+
+type Router struct {
+	noCopy No // nolint:structcheck,unused
+
+	// pool *sync.Pool
+
+	trees    map[string]*node
+	Handler  func(*Ctx)
+	Handlers []Handler
+	Method   string
+	Name     string
+	Path     string
+
+	RedirectTrailingSlash bool
+
+	RedirectFixedPath bool
+
+	HandleMethodNotAllowed bool
+
+	HandleOPTIONS bool
+
+	NotFound fasthttp.RequestHandler
+
+	MethodNotAllowed fasthttp.RequestHandler
+
+	PanicHandler func(*fasthttp.RequestCtx, interface{})
+}
 
 type node struct {
 	path      string
@@ -42,22 +71,21 @@ func NewRouter() *Router {
 	}
 }
 func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
-	// Create a new Ctx instance from fasthttp.RequestCtx
-	customCtx := &Ctx{
-		response:   &ctx.Response,
-		RequestCtx: ctx,
-		route:      r,
-	}
 
-	// Call the router's ServeHTTP method
+	customCtx := AcquireRequestCtx(ctx) // nolint:ifshort
+	defer ReleaseRequestCtx(customCtx)
+
 	handler := r.handleRequest(customCtx)
 	if handler != nil {
-		handler(customCtx)
-	}
 
+		handler(customCtx)
+	} else {
+
+		ctx.Error("Not Found", fasthttp.StatusNotFound)
+	}
 }
 
-// handleRequest finds the handler for the request
+// handleRequest finds the handler for the request.
 func (r *Router) handleRequest(ctx *Ctx) Handler {
 	method := string(ctx.Method())
 	path := string(ctx.Path())
@@ -68,13 +96,115 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 		return nil
 	}
 
-	handle, _ := root.getValue(path)
+	handle, tsr := root.getValue(path)
 	if handle != nil {
 		return handle
 	}
-	ctx.Error("Not Found", fasthttp.StatusNotFound)
+
+	if method != "CONNECT" && path != "/" {
+		code := 301 // Permanent redirect
+		if method != "GET" {
+			// Temporary redirect for methods other than GET
+			code = 307
+		}
+
+		if tsr && r.RedirectTrailingSlash {
+			var uri string
+			if len(path) > 1 && path[len(path)-1] == '/' {
+				uri = path[:len(path)-1]
+			} else {
+				uri = path + "/"
+			}
+
+			if len(ctx.QueryArgs().QueryString()) > 0 {
+				uri += "?" + string(ctx.QueryArgs().QueryString())
+			}
+
+			ctx.Redirect(uri, code)
+			return nil
+		}
+
+		// Try to fix the request path
+		if r.RedirectFixedPath {
+			fixedPath := CleanPath(path)
+			if fixedPath != path {
+				if len(ctx.QueryArgs().QueryString()) > 0 {
+					fixedPath += "?" + string(ctx.QueryArgs().QueryString())
+				}
+				ctx.Redirect(fixedPath, code)
+				return nil
+			}
+		}
+	}
+
+	// Handle OPTIONS requests
+	if method == "OPTIONS" {
+		if r.HandleOPTIONS {
+			allow := r.allowed(path, method)
+			if len(allow) > 0 {
+				ctx.response.Header.Set("Allow", allow)
+				return nil
+			}
+		}
+	}
+
+	// Handle 405 Method Not Allowed
+	if r.HandleMethodNotAllowed {
+		allow := r.allowed(path, method)
+		if len(allow) > 0 {
+			ctx.response.Header.Set("Allow", allow)
+			if r.MethodNotAllowed != nil {
+				r.MethodNotAllowed(ctx.RequestCtx)
+			} else {
+				ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+				ctx.SetContentType("text/plain")
+				ctx.SetBodyString(fasthttp.StatusMessage(fasthttp.StatusMethodNotAllowed))
+			}
+			return nil
+		}
+	}
+
 	return nil
 }
+
+func (r *Router) allowed(path, reqMethod string) (allow string) {
+	if path == "*" || path == "/*" { // server-wide
+		for method := range r.trees {
+			if method == "OPTIONS" {
+				continue
+			}
+
+			// add request method to list of allowed methods
+			if len(allow) == 0 {
+				allow = method
+			} else {
+				allow += ", " + method
+			}
+		}
+	} else { // specific path
+		for method := range r.trees {
+			// Skip the requested method - we already tried this one
+			if method == reqMethod || method == "OPTIONS" {
+				continue
+			}
+
+			handle, _ := r.trees[method].getValue(path)
+			if handle != nil {
+				// add request method to list of allowed methods
+				if len(allow) == 0 {
+					allow = method
+				} else {
+					allow += ", " + method
+				}
+			}
+		}
+	}
+	if len(allow) > 0 {
+		allow += ", OPTIONS"
+	}
+	return
+}
+
 func (r *Router) Handle(method, path string, handle Handler) {
 	if path[0] != '/' {
 		panic("path must begin with '/' in path '" + path + "'")
@@ -414,4 +544,106 @@ walk:
 			path == n.path[:len(path)] && n.handle != nil)
 		return
 	}
+}
+func CleanPath(p string) string {
+	// Turn empty string into "/"
+	if p == "" {
+		return "/"
+	}
+
+	n := len(p)
+	var buf []byte
+
+	// Invariants:
+	//      reading from path; r is index of next byte to process.
+	//      writing to buf; w is index of next byte to write.
+
+	// path must start with '/'
+	r := 1
+	w := 1
+
+	if p[0] != '/' {
+		r = 0
+		buf = make([]byte, n+1)
+		buf[0] = '/'
+	}
+
+	trailing := n > 2 && p[n-1] == '/'
+
+	// A bit more clunky without a 'lazybuf' like the path package, but the loop
+	// gets completely inlined (bufApp). So in contrast to the path package this
+	// loop has no expensive function calls (except 1x make)
+
+	for r < n {
+		switch {
+		case p[r] == '/':
+			// empty path element, trailing slash is added after the end
+			r++
+
+		case p[r] == '.' && r+1 == n:
+			trailing = true
+			r++
+
+		case p[r] == '.' && p[r+1] == '/':
+			// . element
+			r++
+
+		case p[r] == '.' && p[r+1] == '.' && (r+2 == n || p[r+2] == '/'):
+			// .. element: remove to last /
+			r += 2
+
+			if w > 1 {
+				// can backtrack
+				w--
+
+				if buf == nil {
+					for w > 1 && p[w] != '/' {
+						w--
+					}
+				} else {
+					for w > 1 && buf[w] != '/' {
+						w--
+					}
+				}
+			}
+
+		default:
+			// real path element.
+			// add slash if needed
+			if w > 1 {
+				bufApp(&buf, p, w, '/')
+				w++
+			}
+
+			// copy element
+			for r < n && p[r] != '/' {
+				bufApp(&buf, p, w, p[r])
+				w++
+				r++
+			}
+		}
+	}
+
+	// re-append trailing slash
+	if trailing && w > 1 {
+		bufApp(&buf, p, w, '/')
+		w++
+	}
+
+	if buf == nil {
+		return p[:w]
+	}
+	return string(buf[:w])
+}
+
+func bufApp(buf *[]byte, s string, w int, c byte) {
+	if *buf == nil {
+		if s[w] == c {
+			return
+		}
+
+		*buf = make([]byte, len(s))
+		copy(*buf, s[:w])
+	}
+	(*buf)[w] = c
 }

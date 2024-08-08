@@ -8,15 +8,26 @@ import (
 	"C"
 )
 import (
-	"fmt"
+	"os"
+	"runtime"
 
 	"github.com/GoBlaze/goblaze"
-	"github.com/GoBlaze/goblaze/middleware"
+
 	"github.com/sirupsen/logrus"
 )
 
 func helloHandler(ctx *goblaze.Ctx) error {
-	if err := ctx.App.HttpResponse(ctx, []byte("<h1>goblaze Framework yeeeeeeeeee</h1>")); err != nil {
+	if err := ctx.App().HttpResponse(ctx, []byte(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<title>Title</title>
+	</head>
+	<body>
+		<h1>Hello, goblaze!</h1>
+	</body>
+	</html>
+	`)); err != nil {
 		logrus.Error(err)
 		return err
 	}
@@ -25,23 +36,53 @@ func helloHandler(ctx *goblaze.Ctx) error {
 }
 
 func helloHandler2(ctx *goblaze.Ctx) error {
-	if err := ctx.App.HttpResponse(ctx, []byte("<h1>lol</h1>")); err != nil {
-		logrus.Error(err)
-		return err
+	if _, err := ctx.Write([]byte("<h1>lol</h1>")); err != nil {
+		if err != nil {
+			logrus.Error(err)
+			return err
+		}
 	}
+
+	SetResponse(ctx)
+
+	return nil
+}
+
+func SetResponse(ctx *goblaze.Ctx) error {
+	ctx.Redirect("/youGay")
+	return nil
+}
+
+func YouGay(ctx *goblaze.Ctx) error {
+	if _, err := ctx.Write([]byte("<h1>lol</h1>")); err != nil {
+		if err != nil {
+			logrus.Error(err)
+			return err
+		}
+	}
+
 	return nil
 }
 
 func main() {
+	if runtime.GOMAXPROCS(runtime.NumCPU()) == 1 {
+		logrus.Fatal("Please use a system with more than 1 CPU, You're fucking poor, bro....", nil)
+		logrus.Error("GOMAXPROCS must be greater than 1")
+		os.Exit(1)
+	}
 	result := C.add(1, 2)
-	fmt.Printf("Result: %d\n", result)
+	logrus.Errorf("Result: %d\n", result)
 
 	server := goblaze.New()
 
 	server.GET("/", helloHandler)
 	server.GET("/hello", helloHandler2)
+	server.GET("/youGay", YouGay)
 
-	server.Use(middleware.DefaultLogger)
+	// server.Use(middleware.DefaultLogger)
 
 	server.ListenAndServe("localhost", 8080, "info")
+
+	defer server.Shutdown()
+
 }

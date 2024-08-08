@@ -7,11 +7,14 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type Middleware func(next Handler) Handler
+var colors = &DefaultColors
+
+type Middleware Handler
 
 type GoBlaze struct {
 	server     *fasthttp.Server
 	router     *Router
+	stack      [][]*Router
 	log        *logrusLogger
 	middleware []Middleware
 }
@@ -27,8 +30,7 @@ func New() *GoBlaze {
 
 		server: &fasthttp.Server{
 			Handler: router.ServeHTTP,
-
-			Name: "goblaze",
+			Name:    "goblaze",
 		},
 		log: log,
 	}
@@ -38,17 +40,21 @@ func New() *GoBlaze {
 
 // ListenAndServe starts the server.
 func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string) error {
+	// log.Printf("%s%s%s", colors.Green, goblazeW, colors.Reset)
+
 	addr := fmt.Sprintf("%s:%d", host, port)
 
-	server.log.Printf("Listening on: http://%s/", addr)
+	// server.log.Printf("Listening on: http://%s/", addr)
 
 	if len(logLevel) > 0 {
-		server.log.SetLevel(logrus.Level(logrus.TraceLevel))
+		server.log.SetLevel(logrus.Level(logrus.DebugLevel))
 	}
 
 	if err := server.server.ListenAndServe(addr); err != nil {
 		server.log.Fatalf("Server error: %v", err)
 	}
+
+	// go server.printRoutesMessage()
 
 	return nil
 }
@@ -88,3 +94,44 @@ func (server *GoBlaze) HttpResponse(ctx *Ctx, response []byte, statusCode ...int
 	_, err := ctx.RequestCtx.Write(response)
 	return err
 }
+
+func (server *GoBlaze) Shutdown() error {
+	return server.server.Shutdown()
+}
+
+// func (app *GoBlaze) printRoutesMessage() {
+
+// 	var routes []RouteMessage
+// 	for _, routeStack := range app.stack {
+// 		for _, route := range routeStack {
+// 			var newRoute RouteMessage
+// 			newRoute.name = route.Name
+// 			newRoute.method = route.Method
+// 			newRoute.path = route.Path
+// 			for _, handler := range route.Handlers {
+// 				newRoute.handlers += runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name() + " "
+// 			}
+// 			routes = append(routes, newRoute)
+// 		}
+// 	}
+
+// 	out := colorable.NewColorableStdout()
+// 	if os.Getenv("TERM") == "dumb" || os.Getenv("NO_COLOR") == "1" || (!isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd())) {
+// 		out = colorable.NewNonColorable(os.Stdout)
+// 	}
+
+// 	w := tabwriter.NewWriter(out, 1, 1, 1, ' ', 0)
+// 	// Sort routes by path
+// 	sort.Slice(routes, func(i, j int) bool {
+// 		return routes[i].path < routes[j].path
+// 	})
+
+// 	fmt.Fprintf(w, "%smethod\t%s| %spath\t%s| %sname\t%s| %shandlers\t%s\n", colors.Blue, colors.White, colors.Green, colors.White, colors.Cyan, colors.White, colors.Yellow, colors.Reset)
+// 	fmt.Fprintf(w, "%s------\t%s| %s----\t%s| %s----\t%s| %s--------\t%s\n", colors.Blue, colors.White, colors.Green, colors.White, colors.Cyan, colors.White, colors.Yellow, colors.Reset)
+
+// 	for _, route := range routes {
+// 		fmt.Fprintf(w, "%s%s\t%s| %s%s\t%s| %s%s\t%s| %s%s%s\n", colors.Blue, route.method, colors.White, colors.Green, route.path, colors.White, colors.Cyan, route.name, colors.White, colors.Yellow, route.handlers, colors.Reset)
+// 	}
+
+// 	_ = w.Flush()
+// }
