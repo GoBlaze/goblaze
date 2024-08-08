@@ -1,8 +1,12 @@
 package goblaze
 
 import (
+	"sync"
+
 	"github.com/valyala/fasthttp"
 )
+
+var handlerCache sync.Map
 
 type Router struct {
 	noCopy No // nolint:structcheck,unused
@@ -87,8 +91,13 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 // handleRequest finds the handler for the request.
 func (r *Router) handleRequest(ctx *Ctx) Handler {
+
 	method := string(ctx.Method())
 	path := string(ctx.Path())
+
+	if cachedHandler, ok := handlerCache.Load(method + path); ok {
+		return cachedHandler.(Handler)
+	}
 
 	root := r.trees[method]
 	if root == nil {
@@ -98,6 +107,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 
 	handle, tsr := root.getValue(path)
 	if handle != nil {
+		handlerCache.Store(method+path, handle)
 		return handle
 	}
 

@@ -14,8 +14,9 @@ import (
 var requestCtxPool = sync.Pool{
 	New: func() any {
 		return &Ctx{
-			response:               &fasthttp.Response{},
-			RequestCtx:             &fasthttp.RequestCtx{},
+			response:   new(fasthttp.Response),
+			RequestCtx: new(fasthttp.RequestCtx),
+
 			searchingOnAttachedCtx: 0,
 		}
 	},
@@ -24,9 +25,8 @@ var requestCtxPool = sync.Pool{
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get().(*Ctx)
 	actx.RequestCtx = ctx
-	actx.next = false
-	actx.skipView = false
-	atomic.StoreInt32(&actx.searchingOnAttachedCtx, 0)
+
+	// atomic.StoreInt32(&actx.searchingOnAttachedCtx, 0)
 	return actx
 }
 
@@ -48,6 +48,8 @@ type Ctx struct {
 
 func ReleaseRequestCtx(ctx *Ctx) {
 	ctx.RequestCtx = nil
+	ctx.next = false
+	ctx.skipView = false
 	ctx.pnames = [32]string{}
 	ctx.pvalues = [32]string{}
 	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
@@ -71,13 +73,9 @@ func (ctx *Ctx) Value(key any) any {
 }
 
 func (ctx *Ctx) AttachedContext() context.Context {
-	if extraCtx, ok := ctx.UserValue(attachedCtxKey).(context.Context); ok {
-		return extraCtx
-	}
-
-	return nil
+	extraCtx, _ := ctx.UserValue(attachedCtxKey).(context.Context)
+	return extraCtx
 }
-
 func (ctx *Ctx) Param(name string) string {
 	for i := len(ctx.pnames) - 1; i >= 0; i-- {
 		if ctx.pnames[i] == name {

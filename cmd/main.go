@@ -8,10 +8,12 @@ import (
 	"C"
 )
 import (
+	"log"
 	"os"
 	"runtime"
 
 	"github.com/GoBlaze/goblaze"
+	"github.com/valyala/fasthttp"
 
 	"github.com/sirupsen/logrus"
 )
@@ -64,6 +66,20 @@ func YouGay(ctx *goblaze.Ctx) error {
 	return nil
 }
 
+func UsingParams(ctx *goblaze.Ctx) error {
+	paramName := ctx.Param("name")
+	if paramName == "" {
+		log.Printf("Param 'name' not found in request")
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBody([]byte("Missing 'name' parameter"))
+		return nil
+	}
+
+	log.Printf("Param 'name' = %s", paramName)
+	ctx.App().HttpResponse(ctx, []byte(paramName))
+
+	return nil
+}
 func main() {
 	if runtime.GOMAXPROCS(runtime.NumCPU()) == 1 {
 		logrus.Fatal("Please use a system with more than 1 CPU, You're fucking poor, bro....", nil)
@@ -78,8 +94,10 @@ func main() {
 	server.GET("/", helloHandler)
 	server.GET("/hello", helloHandler2)
 	server.GET("/youGay", YouGay)
+	server.GET("/usingParams/:name", UsingParams)
 
 	// server.Use(middleware.DefaultLogger)
+	log.Println("Listening on: http://localhost:8080")
 
 	server.ListenAndServe("localhost", 8080, "info")
 
