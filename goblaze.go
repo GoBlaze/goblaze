@@ -7,13 +7,13 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type middleware func(ctx *Ctx) (int, error)
+type Middleware func(next Handler) Handler
 
 type GoBlaze struct {
 	server     *fasthttp.Server
 	router     *Router
 	log        *logrusLogger
-	middleware []middleware
+	middleware []Middleware
 }
 
 func New() *GoBlaze {
@@ -23,7 +23,8 @@ func New() *GoBlaze {
 
 	server := &GoBlaze{
 		router:     router,
-		middleware: []middleware{},
+		middleware: []Middleware{},
+
 		server: &fasthttp.Server{
 			Handler: router.ServeHTTP,
 
@@ -36,7 +37,7 @@ func New() *GoBlaze {
 }
 
 // ListenAndServe starts the server.
-func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string) {
+func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
 
 	server.log.Printf("Listening on: http://%s/", addr)
@@ -48,6 +49,8 @@ func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string)
 	if err := server.server.ListenAndServe(addr); err != nil {
 		server.log.Fatalf("Server error: %v", err)
 	}
+
+	return nil
 }
 
 // HTTP method shortcuts.
@@ -60,8 +63,15 @@ func (server *GoBlaze) OPTIONS(path string, handle Handler) { server.router.OPTI
 func (server *GoBlaze) HEAD(path string, handle Handler)    { server.router.HEAD(path, handle) }
 
 // Use adds middleware to the server.
-func (server *GoBlaze) Use(middleware ...middleware) {
-	server.middleware = append(server.middleware, middleware...)
+func (g *GoBlaze) Use(handlers ...interface{}) *Router {
+	for _, handler := range handlers {
+		switch h := handler.(type) {
+		case Middleware:
+			g.middleware = append(g.middleware, h)
+		}
+	}
+
+	return g.router
 }
 
 func (server *GoBlaze) HttpResponse(ctx *Ctx, response []byte, statusCode ...int) error {
@@ -73,8 +83,8 @@ func (server *GoBlaze) HttpResponse(ctx *Ctx, response []byte, statusCode ...int
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
-	ctx.ResetBody()
+	ctx.RequestCtx.ResetBody()
 
-	_, err := ctx.Write(response)
+	_, err := ctx.RequestCtx.Write(response)
 	return err
 }

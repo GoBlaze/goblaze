@@ -44,34 +44,37 @@ func NewRouter() *Router {
 func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// Create a new Ctx instance from fasthttp.RequestCtx
 	customCtx := &Ctx{
+		response:   &ctx.Response,
 		RequestCtx: ctx,
 		route:      r,
 	}
 
 	// Call the router's ServeHTTP method
-	r.handleRequest(customCtx)
+	handler := r.handleRequest(customCtx)
+	if handler != nil {
+		handler(customCtx)
+	}
+
 }
 
-func (r *Router) handleRequest(ctx *Ctx) {
+// handleRequest finds the handler for the request
+func (r *Router) handleRequest(ctx *Ctx) Handler {
 	method := string(ctx.Method())
 	path := string(ctx.Path())
 
 	root := r.trees[method]
 	if root == nil {
 		ctx.Error("Method not allowed", fasthttp.StatusMethodNotAllowed)
-		return
+		return nil
 	}
 
-	handle, params, _ := root.getValue(path)
+	handle, _ := root.getValue(path)
 	if handle != nil {
-		if err := handle(ctx, params); err != nil {
-			ctx.Error(err.Error(), fasthttp.StatusInternalServerError)
-		}
-	} else {
-		ctx.Error("Not Found", fasthttp.StatusNotFound)
+		return handle
 	}
+	ctx.Error("Not Found", fasthttp.StatusNotFound)
+	return nil
 }
-
 func (r *Router) Handle(method, path string, handle Handler) {
 	if path[0] != '/' {
 		panic("path must begin with '/' in path '" + path + "'")
@@ -332,7 +335,7 @@ func (n *node) incrementChildPrio(pos int) int {
 	return newPos
 }
 
-func (n *node) getValue(path string) (handle Handler, p Params, tsr bool) {
+func (n *node) getValue(path string) (handle Handler, tsr bool) {
 walk:
 	for {
 		if len(path) > len(n.path) {
@@ -359,14 +362,6 @@ walk:
 						end++
 					}
 
-					if p == nil {
-						p = make(Params, 0, n.maxParams)
-					}
-					i := len(p)
-					p = p[:i+1]
-					p[i].Key = n.path[1:]
-					p[i].Value = path[:end]
-
 					if end < len(path) {
 						if len(n.children) > 0 {
 							path = path[end:]
@@ -387,14 +382,6 @@ walk:
 					return
 
 				case catchAll:
-					if p == nil {
-						p = make(Params, 0, n.maxParams)
-					}
-					i := len(p)
-					p = p[:i+1]
-					p[i].Key = n.path[2:]
-					p[i].Value = path
-
 					handle = n.handle
 					return
 

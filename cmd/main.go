@@ -8,22 +8,27 @@ import (
 	"C"
 )
 import (
-	"errors"
 	"fmt"
 
 	"github.com/GoBlaze/goblaze"
+	"github.com/GoBlaze/goblaze/middleware"
 	"github.com/sirupsen/logrus"
-	"github.com/valyala/fasthttp"
 )
 
-func IsGet(ctx *goblaze.Ctx) (int, error) {
-	logrus.Info("This middleware launch an error...")
-	return fasthttp.StatusBadRequest, errors.New("Fake error")
+func helloHandler(ctx *goblaze.Ctx) error {
+	if err := ctx.App.HttpResponse(ctx, []byte("<h1>goblaze Framework yeeeeeeeeee</h1>")); err != nil {
+		logrus.Error(err)
+		return err
+	}
+
+	return nil
 }
 
-func helloHandler(ctx *goblaze.Ctx, params goblaze.Params) error {
-	ctx.GoBlaze.HttpResponse(ctx, []byte("<h1>goblaze Framework yeeeeeeeeee</h1>"))
-
+func helloHandler2(ctx *goblaze.Ctx) error {
+	if err := ctx.App.HttpResponse(ctx, []byte("<h1>lol</h1>")); err != nil {
+		logrus.Error(err)
+		return err
+	}
 	return nil
 }
 
@@ -34,7 +39,9 @@ func main() {
 	server := goblaze.New()
 
 	server.GET("/", helloHandler)
-	server.Use(IsGet)
+	server.GET("/hello", helloHandler2)
+
+	server.Use(middleware.DefaultLogger)
 
 	server.ListenAndServe("localhost", 8080, "info")
 }

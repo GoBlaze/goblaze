@@ -15,13 +15,13 @@ type Params []struct {
 }
 
 // Handler defines a function to serve HTTP requests.
-type Handler func(ctx *Ctx, params Params) error
+type Handler func(ctx *Ctx) error
 type RequestHandler func(*fasthttp.RequestHandler)
 
 type Router struct {
-	noCopy No // nolint:structcheck,unused
-
-	Handler Handler
+	noCopy             No // nolint:structcheck,unused
+	customMethodsIndex map[string]int
+	registeredPaths    map[string][]string
 
 	trees map[string]*node
 
@@ -41,11 +41,12 @@ type Router struct {
 }
 
 type Ctx struct {
-	noCopy No // nolint:structcheck,unused
-	*GoBlaze
-	*fasthttp.RequestCtx
+	noCopy   No // nolint:structcheck,unused
+	App      *GoBlaze
+	response *fasthttp.Response
 
 	route *Router
+	*fasthttp.RequestCtx
 }
 
 type JSON map[string]any
