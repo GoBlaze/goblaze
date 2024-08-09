@@ -37,4 +37,12 @@ clean:
 
 
 bench:
-	@go test -benchmem   -timeout 10s -bench . -benchmem ./benchmarks 
+	@go test -benchmem  -cpuprofile cpu.prof -memprofile mem.prof -benchtime=5s   -timeout 10s -bench . -benchmem ./benchmarks 
+
+
+memory:
+	@go tool pprof -http=:8080  mem.prof
+# install graphviz too see graphs in web
+
+cpu:
+	@go tool pprof -http=:8080  cpu.prof
