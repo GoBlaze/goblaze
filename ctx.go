@@ -11,11 +11,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var requestCtxPool = sync.Pool{
+var requestCtxPool = &sync.Pool{
 	New: func() any {
 		return &Ctx{
-			response:   new(fasthttp.Response),
-			RequestCtx: new(fasthttp.RequestCtx),
+			response:   &fasthttp.Response{},
+			RequestCtx: &fasthttp.RequestCtx{},
 
 			searchingOnAttachedCtx: 0,
 		}

@@ -16,12 +16,12 @@ type RequestHandler func(*fasthttp.RequestHandler)
 
 type JSON map[string]any
 
-type RouteMessage struct {
-	name     string
-	method   string
-	path     string
-	handlers string
-}
+//	type RouteMessage struct {
+//		name     string
+//		method   string
+//		path     string
+//		handlers string
+//	}
 type Colors struct {
 	noCopy No //nolint:unused,structcheck
 	// Black color.
