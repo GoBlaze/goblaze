@@ -90,8 +90,8 @@ func (c *Ctx) Response() *fasthttp.Response {
 	return c.response
 }
 
-func (c *Ctx) Method() string {
-	return string(c.RequestCtx.Method())
+func (c *Ctx) Method() []byte {
+	return c.RequestCtx.Method()
 
 }
 

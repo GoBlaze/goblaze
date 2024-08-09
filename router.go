@@ -46,6 +46,7 @@ type node struct {
 	handle    Handler
 	priority  int
 	maxParams uint8
+	pool      sync.Pool
 }
 
 type nodeType uint8
@@ -93,8 +94,8 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 // handleRequest finds the handler for the request.
 func (r *Router) handleRequest(ctx *Ctx) Handler {
-	method := string(ctx.Method())
-	path := string(ctx.Path())
+	method := String(ctx.Method())
+	path := String(ctx.Path())
 
 	if cachedHandler, ok := handlerCache.Load(method + path); ok {
 		return cachedHandler.(Handler)
