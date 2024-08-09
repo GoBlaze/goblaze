@@ -75,8 +75,8 @@ func (p *pool[T]) Count() int64 {
 }
 
 func (p *pool[T]) calibrate() {
-	a := make([]callSize, 0, steps)
 	var callsSum uint64
+	a := make([]callSize, 0, steps)
 
 	for i := 0; i < steps; i++ {
 		calls := atomic.SwapUint64(&p.calls[i], 0)
@@ -115,7 +115,6 @@ func (p *pool[T]) calibrate() {
 	atomic.StoreUint64(&p.maxSize, maxSize)
 	atomic.StoreUint32(&p.calibrating, 0)
 }
-
 func index(n int) int {
 	n--
 	n >>= minBitSize
