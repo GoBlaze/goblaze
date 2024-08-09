@@ -13,31 +13,26 @@ func validatePath(path string) string {
 	return path
 }
 
-//go:nocheckptr
 //go:nosplit
 func String(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-//go:nocheckptr
 //go:nosplit
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
-//go:nocheckptr
 //go:nosplit
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
-//go:nocheckptr
 //go:nosplit
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
 
-//go:nocheckptr
 //go:nosplit
 func CopyString(s string) string {
 	c := make([]byte, len(s))
