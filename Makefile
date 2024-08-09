@@ -37,7 +37,7 @@ clean:
 
 
 bench:
-	@go test -benchmem  -cpuprofile cpu.prof -memprofile mem.prof -benchtime=5s   -timeout 10s -bench . -benchmem ./benchmarks 
+	@go test -benchmem  -cpuprofile cpu.prof -memprofile mem.prof -benchtime=5s -timeout 20s -bench . -benchmem ./benchmarks -count 3
 
 
 memory:
