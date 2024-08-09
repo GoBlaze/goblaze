@@ -662,14 +662,31 @@ func CleanPath(p string) string {
 	return String(buf[:w])
 }
 
+// bufApp appends a byte to the buffer if it's not already there.
 func bufApp(buf *[]byte, s string, w int, c byte) {
-	if *buf == nil {
-		if s[w] == c {
+	// If the buffer is nil, create a new one and copy the prefix.
+	if *buf == nil || len(*buf) < w {
+		*buf = make([]byte, len(s)+1)
+		if *buf == nil {
+			*buf = make([]byte, len(s))
+			copy(*buf, s)
+			*buf = (*buf)[:w]
+		}
+
+		// If the buffer already has the byte at the right position, we're done.
+		if (*buf)[w] == c {
 			return
 		}
 
-		*buf = make([]byte, len(s))
-		copy(*buf, s[:w])
+		// If the buffer is too short, reallocate it.
+		if cap(*buf) <= w {
+			newBuf := make([]byte, len(s), (3*len(s))/2+1)
+			copy(newBuf, *buf)
+			*buf = newBuf
+		}
+
+		// Append the byte.
+		(*buf)[w] = c
 	}
-	(*buf)[w] = c
+
 }

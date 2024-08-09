@@ -4,8 +4,14 @@ import (
 	"sync"
 )
 
+type No struct{}
+
+func (*No) Lock()   {}
+func (*No) Unlock() {}
+
 type Pool[T any] struct {
-	items sync.Pool
+	noCopy No // nolint:structcheck,unused
+	items  sync.Pool
 
 	pointers sync.Pool
 }
