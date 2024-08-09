@@ -6,7 +6,7 @@
 *.dylib
 *.a
 *.o
-.prof
+*.prof
 
 
 bin
