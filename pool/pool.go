@@ -3,7 +3,6 @@ package pool
 import (
 	"sync"
 	"sync/atomic"
-	"unsafe"
 )
 
 const (
@@ -22,13 +21,17 @@ type Pool[T any] interface {
 }
 
 type pool[T any] struct {
+	s            struct{} // nolint:structcheck,unused
 	internalPool *sync.Pool
 	count        int64
-	calibrating  uint32
-	calls        [steps]uint64
-	defaultSize  uint64
-	maxSize      uint64
-	_            [64]byte
+
+	// calibrating uint32
+
+	// calls [steps]uint64
+
+	defaultSize uint64
+
+	maxSize uint64
 }
 
 func NewPool[T any](constructor func() T) Pool[T] {
@@ -56,36 +59,36 @@ func (p *pool[T]) Count() int64 {
 	return atomic.LoadInt64(&p.count)
 }
 
-func (p *pool[T]) calibrate() {
-	callsSum, maxSize, defaultSize := uint64(0), uint64(minSize), uint64(minSize)
-	maxSum := uint64(float64(calibrateCallsThreshold) * maxPercentile)
+// func (p *pool[T]) calibrate() {
+// 	callsSum, maxSize, defaultSize := uint64(0), uint64(minSize), uint64(minSize)
+// 	maxSum := uint64(float64(calibrateCallsThreshold) * maxPercentile)
 
-	ptr := uintptr(unsafe.Pointer(&p.calls[0]))
-	stepSize := unsafe.Sizeof(p.calls[0])
+// 	ptr := uintptr(unsafe.Pointer(&p.calls[0]))
+// 	stepSize := unsafe.Sizeof(p.calls[0])
 
-	for i := 0; i < steps; i++ {
-		calls := *(*uint64)(unsafe.Pointer(ptr))
-		ptr += stepSize
+// 	for i := 0; i < steps; i++ {
+// 		calls := *(*uint64)(unsafe.Pointer(ptr))
+// 		ptr += stepSize
 
-		if calls > 0 {
-			size := uint64(minSize << i)
-			callsSum += calls
-			if size > maxSize {
-				maxSize = size
-			}
-			if callsSum > maxSum {
-				break
-			}
-			if size < defaultSize {
-				defaultSize = size
-			}
-		}
-	}
+// 		if calls > 0 {
+// 			size := uint64(minSize << i)
+// 			callsSum += calls
+// 			if size > maxSize {
+// 				maxSize = size
+// 			}
+// 			if callsSum > maxSum {
+// 				break
+// 			}
+// 			if size < defaultSize {
+// 				defaultSize = size
+// 			}
+// 		}
+// 	}
 
-	atomic.StoreUint64(&p.defaultSize, defaultSize)
-	atomic.StoreUint64(&p.maxSize, maxSize)
-	atomic.StoreUint32(&p.calibrating, 0)
-}
+// 	atomic.StoreUint64(&p.defaultSize, defaultSize)
+// 	atomic.StoreUint64(&p.maxSize, maxSize)
+// 	atomic.StoreUint32(&p.calibrating, 0)
+// }
 
 func index(n int) int {
 	n--

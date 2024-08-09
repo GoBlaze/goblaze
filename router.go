@@ -3,7 +3,6 @@ package goblaze
 import (
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/valyala/fasthttp"
 )
@@ -43,8 +42,8 @@ type node struct {
 	children  []*node
 	handle    Handler
 	priority  int
+
 	maxParams uint8
-	pool      sync.Pool
 }
 
 type nodeType uint8

@@ -12,6 +12,7 @@ var colors = &DefaultColors
 type Middleware Handler
 
 type GoBlaze struct {
+	noCopy     No // nolint:structcheck,unused
 	server     *fasthttp.Server
 	router     *Router
 	stack      [][]*Router

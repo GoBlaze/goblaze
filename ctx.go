@@ -22,6 +22,7 @@ var requestCtxPool = pool.NewPool(func() *Ctx {
 
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get()
+	actx.index = 0
 	actx.RequestCtx = ctx // Set the incoming RequestCtx
 	return actx
 }
@@ -29,16 +30,19 @@ func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 var attachedCtxKey = fmt.Sprintf("__attachedCtx::%x__", time.Now().UnixNano())
 
 type Ctx struct {
+	noCopy   No // nolint:structcheck,unused
 	app      *GoBlaze
 	response *fasthttp.Response
 
-	pnames  [32]string
+	pnames [32]string
+
 	pvalues [32]string
 
 	next                   bool
 	skipView               bool
 	searchingOnAttachedCtx int32
-	index                  int
+
+	index int
 
 	handlers []func(*Ctx)
 
