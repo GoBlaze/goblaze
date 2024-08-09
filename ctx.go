@@ -3,27 +3,25 @@ package goblaze
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/GoBlaze/goblaze/pool"
 	"github.com/valyala/fasthttp"
 )
 
-var requestCtxPool = &sync.Pool{
-	New: func() any {
-		return &Ctx{
-			response:   &fasthttp.Response{},
-			RequestCtx: &fasthttp.RequestCtx{},
+var requestCtxPool = pool.NewPool(func() *Ctx {
+	return &Ctx{
+		response:   &fasthttp.Response{},
+		RequestCtx: &fasthttp.RequestCtx{},
 
-			searchingOnAttachedCtx: 0,
-		}
-	},
-}
+		searchingOnAttachedCtx: 0,
+	}
+})
 
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
-	actx := requestCtxPool.Get().(*Ctx)
+	actx := requestCtxPool.Get()
 	actx.RequestCtx = ctx // Set the incoming RequestCtx
 	return actx
 }
