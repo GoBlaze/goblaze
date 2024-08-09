@@ -3,6 +3,7 @@ package pool
 import (
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 const (
@@ -27,11 +28,13 @@ type pool[T any] struct {
 	calls        [steps]uint64
 	defaultSize  uint64
 	maxSize      uint64
+	_            [64]byte
 }
 
 func NewPool[T any](constructor func() T) Pool[T] {
 	return &pool[T]{
 		internalPool: &sync.Pool{
+
 			New: func() any {
 				return constructor()
 			},
@@ -42,23 +45,11 @@ func NewPool[T any](constructor func() T) Pool[T] {
 }
 
 func (p *pool[T]) Get() T {
-	val := p.internalPool.Get()
-	if val == nil {
-		var zeroVal T
-		return zeroVal
-	}
-
-	atomic.AddInt64(&p.count, -1)
-	return val.(T)
+	return p.internalPool.Get().(T)
 }
 
 func (p *pool[T]) Put(value T) {
 	p.internalPool.Put(value)
-	atomic.AddInt64(&p.count, 1)
-
-	if atomic.CompareAndSwapUint32(&p.calibrating, 0, 1) {
-		go p.calibrate()
-	}
 }
 
 func (p *pool[T]) Count() int64 {
@@ -66,17 +57,18 @@ func (p *pool[T]) Count() int64 {
 }
 
 func (p *pool[T]) calibrate() {
-	var callsSum uint64
-	var maxSize uint64
-	var defaultSize uint64 = minSize
+	callsSum, maxSize, defaultSize := uint64(0), uint64(minSize), uint64(minSize)
+	maxSum := uint64(float64(calibrateCallsThreshold) * maxPercentile)
 
-	var maxSum uint64 = uint64(float64(calibrateCallsThreshold) * maxPercentile)
+	ptr := uintptr(unsafe.Pointer(&p.calls[0]))
+	stepSize := unsafe.Sizeof(p.calls[0])
 
 	for i := 0; i < steps; i++ {
-		calls := atomic.SwapUint64(&p.calls[i], 0)
+		calls := *(*uint64)(unsafe.Pointer(ptr))
+		ptr += stepSize
+
 		if calls > 0 {
 			size := uint64(minSize << i)
-
 			callsSum += calls
 			if size > maxSize {
 				maxSize = size
@@ -94,6 +86,7 @@ func (p *pool[T]) calibrate() {
 	atomic.StoreUint64(&p.maxSize, maxSize)
 	atomic.StoreUint32(&p.calibrating, 0)
 }
+
 func index(n int) int {
 	n--
 	n >>= minBitSize
