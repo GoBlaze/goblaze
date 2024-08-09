@@ -2,104 +2,54 @@ package pool
 
 import (
 	"sync"
-	"sync/atomic"
 )
 
-const (
-	minBitSize              = 6
-	steps                   = 20
-	maxSize                 = 1 << 20
-	minSize                 = 1 << minBitSize
-	calibrateCallsThreshold = 100000
-	maxPercentile           = 0.95
-)
+type Pool[T any] struct {
+	items sync.Pool
 
-type Pool[T any] interface {
-	Get() T
-	Put(T)
-	Count() int64
+	pointers sync.Pool
 }
 
-type pool[T any] struct {
-	s            struct{} // nolint:structcheck,unused
-	internalPool *sync.Pool
-	count        int64
+// New creates a new Pool[T] with the given function to create new items.
 
-	// calibrating uint32
-
-	// calls [steps]uint64
-
-	defaultSize uint64
-
-	maxSize uint64
-}
-
-func NewPool[T any](constructor func() T) Pool[T] {
-	return &pool[T]{
-		internalPool: &sync.Pool{
-
-			New: func() any {
-				return constructor()
+func New[T any](item func() T) Pool[T] {
+	return Pool[T]{
+		items: sync.Pool{
+			New: func() interface{} {
+				val := item()
+				return &val
 			},
 		},
-		defaultSize: minSize,
-		maxSize:     maxSize,
 	}
 }
 
-func (p *pool[T]) Get() T {
-	return p.internalPool.Get().(T)
-}
+// Get returns an item from the pool, creating a new one if necessary.
 
-func (p *pool[T]) Put(value T) {
-	p.internalPool.Put(value)
-}
+func (p *Pool[T]) Get() T {
+	pooled := p.items.Get()
+	if pooled == nil {
 
-func (p *pool[T]) Count() int64 {
-	return atomic.LoadInt64(&p.count)
-}
-
-// func (p *pool[T]) calibrate() {
-// 	callsSum, maxSize, defaultSize := uint64(0), uint64(minSize), uint64(minSize)
-// 	maxSum := uint64(float64(calibrateCallsThreshold) * maxPercentile)
-
-// 	ptr := uintptr(unsafe.Pointer(&p.calls[0]))
-// 	stepSize := unsafe.Sizeof(p.calls[0])
-
-// 	for i := 0; i < steps; i++ {
-// 		calls := *(*uint64)(unsafe.Pointer(ptr))
-// 		ptr += stepSize
-
-// 		if calls > 0 {
-// 			size := uint64(minSize << i)
-// 			callsSum += calls
-// 			if size > maxSize {
-// 				maxSize = size
-// 			}
-// 			if callsSum > maxSum {
-// 				break
-// 			}
-// 			if size < defaultSize {
-// 				defaultSize = size
-// 			}
-// 		}
-// 	}
-
-// 	atomic.StoreUint64(&p.defaultSize, defaultSize)
-// 	atomic.StoreUint64(&p.maxSize, maxSize)
-// 	atomic.StoreUint32(&p.calibrating, 0)
-// }
-
-func index(n int) int {
-	n--
-	n >>= minBitSize
-	idx := 0
-	for n > 0 {
-		n >>= 1
-		idx++
+		var zero T
+		return zero
 	}
-	if idx >= steps {
-		idx = steps - 1
+
+	ptr := pooled.(*T)
+	item := *ptr
+	var zero T
+
+	*ptr = zero
+	p.pointers.Put(ptr)
+	return item
+}
+
+// Put adds an item to the pool.
+func (p *Pool[T]) Put(item T) {
+	var ptr *T
+	if pooled := p.pointers.Get(); pooled != nil {
+		ptr = pooled.(*T)
+	} else {
+		ptr = new(T)
 	}
-	return idx
+	*ptr = item
+	p.items.Put(ptr)
 }

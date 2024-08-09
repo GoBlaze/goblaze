@@ -190,7 +190,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
-	allowed := make([]string, 0, 10) // Increase capacity to avoid frequent reallocations
+	allowed := make([]string, 0, 8) // Increase capacity to avoid frequent reallocations
 
 	if path == "*" || path == "/*" { // Server-wide
 		for method := range r.trees {

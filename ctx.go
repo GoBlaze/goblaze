@@ -11,7 +11,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var requestCtxPool = pool.NewPool(func() *Ctx {
+var requestCtxPool = pool.New[*Ctx](func() *Ctx {
 	return &Ctx{
 		response:   &fasthttp.Response{},
 		RequestCtx: &fasthttp.RequestCtx{},
@@ -22,7 +22,7 @@ var requestCtxPool = pool.NewPool(func() *Ctx {
 
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get()
-	actx.index = 0
+
 	actx.RequestCtx = ctx // Set the incoming RequestCtx
 	return actx
 }
