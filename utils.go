@@ -1,6 +1,8 @@
 package goblaze
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // validatePath checks if the path starts with a '/' and panics if not.
 // It also returns the path.
@@ -11,7 +13,24 @@ func validatePath(path string) string {
 	return path
 }
 
-// #nosec G103
+//go:nosplit
 func String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(unsafe.SliceData(b), len(b))
+}
+
+//go:nosplit
+func StringToBytes(s string) []byte {
+	return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+//go:nosplit
+func Copy(b []byte, b1 []byte) ([]byte, []byte) {
+	return []byte(String(b)), []byte(String(b1))
+}
+
+//go:nosplit
+func CopyString(s string) string {
+	c := make([]byte, len(s))
+	copy(c, StringToBytes(s))
+	return String(c)
 }

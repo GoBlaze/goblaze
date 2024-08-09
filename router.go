@@ -8,8 +8,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var handlerCache sync.Map
-
 type Router struct {
 	noCopy No // nolint:structcheck,unused
 
@@ -97,10 +95,6 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 	method := String(ctx.Method())
 	path := String(ctx.Path())
 
-	if cachedHandler, ok := handlerCache.Load(method + path); ok {
-		return cachedHandler.(Handler)
-	}
-
 	root := r.trees[method]
 	if root == nil {
 		// If no handler is found for the method, handle the case properly
@@ -125,8 +119,9 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 
 	handle, tsr := root.getValue(path)
 	if handle != nil {
-		handlerCache.Store(method+path, handle)
+
 		return handle
+
 	}
 
 	if method != "CONNECT" && path != "/" {
@@ -145,7 +140,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 			}
 
 			if len(ctx.QueryArgs().QueryString()) > 0 {
-				uri += "?" + string(ctx.QueryArgs().QueryString())
+				uri += "?" + String(ctx.QueryArgs().QueryString())
 			}
 
 			ctx.Redirect(uri, code)
@@ -157,7 +152,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 			fixedPath := CleanPath(path)
 			if fixedPath != path {
 				if len(ctx.QueryArgs().QueryString()) > 0 {
-					fixedPath += "?" + string(ctx.QueryArgs().QueryString())
+					fixedPath += "?" + String(ctx.QueryArgs().QueryString())
 				}
 				ctx.Redirect(fixedPath, code)
 				return nil
@@ -291,7 +286,7 @@ func (n *node) addRoute(path string, handle Handler) {
 					path:      n.path[i:],
 					wildChild: n.wildChild,
 					nType:     static,
-					indices:   n.indices,
+					indices:   String([]byte{n.path[i]}),
 					children:  n.children,
 					handle:    n.handle,
 					priority:  n.priority - 1,
@@ -305,7 +300,7 @@ func (n *node) addRoute(path string, handle Handler) {
 				}
 
 				n.children = []*node{&child}
-				n.indices = string([]byte{n.path[i]})
+				n.indices = String([]byte{n.path[i]})
 				n.path = path[:i]
 				n.handle = nil
 				n.wildChild = false
@@ -352,7 +347,7 @@ func (n *node) addRoute(path string, handle Handler) {
 				}
 
 				if c != ':' && c != '*' {
-					n.indices += string([]byte{c})
+					n.indices += string(c) // Convert byte to string directly
 					child := &node{
 						maxParams: numParams,
 					}
@@ -665,7 +660,7 @@ func CleanPath(p string) string {
 	if buf == nil {
 		return p[:w]
 	}
-	return string(buf[:w])
+	return String(buf[:w])
 }
 
 func bufApp(buf *[]byte, s string, w int, c byte) {
