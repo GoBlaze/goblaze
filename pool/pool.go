@@ -1,19 +1,16 @@
 package pool
 
 import (
-	"sort"
 	"sync"
 	"sync/atomic"
 )
 
 const (
-	minBitSize = 6
-	steps      = 20
-
-	maxSize = 1 << 20
-
+	minBitSize              = 6
+	steps                   = 20
+	maxSize                 = 1 << 20
 	minSize                 = 1 << minBitSize
-	calibrateCallsThreshold = 42000
+	calibrateCallsThreshold = 100000
 	maxPercentile           = 0.95
 )
 
@@ -30,11 +27,6 @@ type pool[T any] struct {
 	calls        [steps]uint64
 	defaultSize  uint64
 	maxSize      uint64
-}
-
-type callSize struct {
-	calls uint64
-	size  uint64
 }
 
 func NewPool[T any](constructor func() T) Pool[T] {
@@ -67,7 +59,6 @@ func (p *pool[T]) Put(value T) {
 	if atomic.CompareAndSwapUint32(&p.calibrating, 0, 1) {
 		go p.calibrate()
 	}
-
 }
 
 func (p *pool[T]) Count() int64 {
@@ -76,38 +67,26 @@ func (p *pool[T]) Count() int64 {
 
 func (p *pool[T]) calibrate() {
 	var callsSum uint64
-	a := make([]callSize, 0, steps)
+	var maxSize uint64
+	var defaultSize uint64 = minSize
+
+	var maxSum uint64 = uint64(float64(calibrateCallsThreshold) * maxPercentile)
 
 	for i := 0; i < steps; i++ {
 		calls := atomic.SwapUint64(&p.calls[i], 0)
 		if calls > 0 {
+			size := uint64(minSize << i)
+
 			callsSum += calls
-			a = append(a, callSize{
-				calls: calls,
-				size:  minSize << i,
-			})
-		}
-	}
-
-	if len(a) == 0 {
-		atomic.StoreUint32(&p.calibrating, 0)
-		return
-	}
-
-	sort.Slice(a, func(i, j int) bool { return a[i].calls > a[j].calls })
-
-	defaultSize := a[0].size
-	maxSize := defaultSize
-	maxSum := uint64(float64(callsSum) * maxPercentile)
-	callsSum = 0
-
-	for _, v := range a {
-		if callsSum > maxSum {
-			break
-		}
-		callsSum += v.calls
-		if v.size > maxSize {
-			maxSize = v.size
+			if size > maxSize {
+				maxSize = size
+			}
+			if callsSum > maxSum {
+				break
+			}
+			if size < defaultSize {
+				defaultSize = size
+			}
 		}
 	}
 
