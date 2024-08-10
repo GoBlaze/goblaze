@@ -191,7 +191,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
-	var allowed []string
+	allowed := make([]string, 0, 10)
 
 	if path == "*" || path == "/*" {
 		for method := range r.trees {

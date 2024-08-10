@@ -14,7 +14,6 @@ func AcquireWaitGroup() *sync.WaitGroup {
 	return waitGroupPool.Get()
 }
 
-// ReleaseWaitGroup возвращает WaitGroup в пул
 func ReleaseWaitGroup(wg *sync.WaitGroup) {
 	Reset()
 	waitGroupPool.Put(wg)
