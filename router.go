@@ -87,7 +87,7 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		ctx.Error("Not Found", fasthttp.StatusNotFound)
 	}
-	defer ReleaseRequestCtx(customCtx)
+	ReleaseRequestCtx(customCtx)
 }
 
 // handleRequest finds the handler for the request.

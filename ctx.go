@@ -1,6 +1,12 @@
 package goblaze
 
+// #cgo CFLAGS: -I ./ccode
+// #cgo LDFLAGS: -L ./ccode/ -lother
+// #include <stdlib.h>
+// #include "cJSON.h"
+
 import (
+	"C"
 	"context"
 	"fmt"
 	"sync/atomic"
@@ -148,4 +154,26 @@ func (c *Ctx) Query(key string) []byte {
 //	}
 func (c *Ctx) App() *GoBlaze {
 	return c.app
+}
+
+func (c *Ctx) ParseJSON(jsonStr string) (map[string]interface{}, error) {
+	cstr := C.CString(jsonStr)
+
+	C.cJSON_Parse(cstr)
+
+	return result, nil
+}
+func (ctx *Ctx) HttpResponse(response []byte, statusCode ...int) error {
+	ctx.SetContentType("text/html; charset=utf-8")
+
+	if len(statusCode) > 0 {
+		ctx.SetStatusCode(statusCode[0])
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	}
+
+	ctx.RequestCtx.ResetBody()
+
+	_, err := ctx.RequestCtx.Write(response)
+	return err
 }

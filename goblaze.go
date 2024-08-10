@@ -81,21 +81,6 @@ func (g *GoBlaze) Use(handlers ...interface{}) *Router {
 	return g.router
 }
 
-func (server *GoBlaze) HttpResponse(ctx *Ctx, response []byte, statusCode ...int) error {
-	ctx.SetContentType("text/html; charset=utf-8")
-
-	if len(statusCode) > 0 {
-		ctx.SetStatusCode(statusCode[0])
-	} else {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
-
-	ctx.RequestCtx.ResetBody()
-
-	_, err := ctx.RequestCtx.Write(response)
-	return err
-}
-
 func (server *GoBlaze) Shutdown() error {
 	return server.server.ShutdownWithContext(context.Background())
 }

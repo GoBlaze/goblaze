@@ -19,7 +19,7 @@ import (
 )
 
 func helloHandler(ctx *goblaze.Ctx) error {
-	if err := ctx.App().HttpResponse(ctx, []byte(`
+	if err := ctx.HttpResponse([]byte(` 
 	<!DOCTYPE html>
 	<html>
 	<head>
@@ -36,6 +36,12 @@ func helloHandler(ctx *goblaze.Ctx) error {
 
 	return nil
 }
+
+// func ParseJson(ctx *goblaze.Ctx) error {
+// 	ctx.ParseJSON("fjafjajf")
+
+// 	return nil
+// }
 
 func helloHandler2(ctx *goblaze.Ctx) error {
 	if _, err := ctx.Write([]byte("<h1>lol</h1>")); err != nil {
@@ -56,7 +62,7 @@ func SetResponse(ctx *goblaze.Ctx) error {
 }
 
 func YouGay(ctx *goblaze.Ctx) error {
-	if err := ctx.App().HttpResponse(ctx, []byte("<h1>lol</h1>")); err != nil {
+	if err := ctx.HttpResponse([]byte("<h1>lol</h1>")); err != nil {
 		if err != nil {
 			logrus.Error(err)
 			return err
@@ -76,7 +82,7 @@ func UsingParams(ctx *goblaze.Ctx) error {
 	}
 
 	log.Printf("Param 'name' = %s", paramName)
-	ctx.App().HttpResponse(ctx, []byte(paramName))
+	ctx.HttpResponse([]byte(paramName))
 
 	return nil
 }
@@ -92,6 +98,7 @@ func main() {
 	server := goblaze.New()
 
 	server.GET("/", helloHandler)
+	// server.GET("/json", ParseJson)
 	server.GET("/hello", helloHandler2)
 	server.GET("/youGay", YouGay)
 	server.GET("/usingParams/:name", UsingParams)
