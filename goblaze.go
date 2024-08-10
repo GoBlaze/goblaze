@@ -12,12 +12,12 @@ var colors = &DefaultColors
 type Middleware Handler
 
 type GoBlaze struct {
-	noCopy     No // nolint:structcheck,unused
+	noCopy No // nolint:structcheck,unused
+	// stack      [][]*Router
+	middleware []Middleware
 	server     *fasthttp.Server
 	router     *Router
-	stack      [][]*Router
 	log        *logrusLogger
-	middleware []Middleware
 }
 
 func New() *GoBlaze {

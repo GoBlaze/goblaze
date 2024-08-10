@@ -2,7 +2,6 @@ package goblaze
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/valyala/fasthttp"
 )
@@ -10,14 +9,20 @@ import (
 type Router struct {
 	noCopy No // nolint:structcheck,unused
 
+	Handlers []Handler
 	// pool *sync.Pool
 
-	trees    map[string]*node
-	Handler  func(*Ctx)
-	Handlers []Handler
-	Method   string
-	Name     string
-	Path     string
+	trees   map[string]*node
+	Method  string
+	Name    string
+	Path    string
+	Handler func(*Ctx)
+
+	NotFound fasthttp.RequestHandler
+
+	MethodNotAllowed fasthttp.RequestHandler
+
+	PanicHandler func(*fasthttp.RequestCtx, interface{})
 
 	RedirectTrailingSlash bool
 
@@ -26,22 +31,17 @@ type Router struct {
 	HandleMethodNotAllowed bool
 
 	HandleOPTIONS bool
-
-	NotFound fasthttp.RequestHandler
-
-	MethodNotAllowed fasthttp.RequestHandler
-
-	PanicHandler func(*fasthttp.RequestCtx, interface{})
 }
 
 type node struct {
+	noCopy    No // nolint:structcheck,unused
+	children  []*node
 	path      string
+	indices   string
+	priority  int
+	handle    Handler
 	wildChild bool
 	nType     nodeType
-	indices   string
-	children  []*node
-	handle    Handler
-	priority  int
 
 	maxParams uint8
 }
@@ -219,11 +219,12 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 	// Sort methods
 	sort.Strings(allowed)
 
-	// Use strings.Builder for efficient concatenation
-	var builder strings.Builder
+	// also available for string.builder
+	var builder *StringBuffer
 	for i, method := range allowed {
 		if i > 0 {
 			builder.WriteString(", ")
+
 		}
 		builder.WriteString(method)
 	}

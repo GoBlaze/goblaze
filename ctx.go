@@ -11,7 +11,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var requestCtxPool = pool.New[*Ctx](func() *Ctx {
+var requestCtxPool = pool.NewPool[*Ctx](func() *Ctx {
 	return &Ctx{
 		response:   &fasthttp.Response{},
 		RequestCtx: &fasthttp.RequestCtx{},
@@ -30,23 +30,19 @@ func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 var attachedCtxKey = fmt.Sprintf("__attachedCtx::%x__", time.Now().UnixNano())
 
 type Ctx struct {
-	noCopy   No // nolint:structcheck,unused
-	app      *GoBlaze
-	response *fasthttp.Response
-
-	pnames [32]string
-
-	pvalues [32]string
-
-	next                   bool
-	skipView               bool
+	noCopy                 No // nolint:structcheck,unused
+	pnames                 [32]string
+	pvalues                [32]string
+	handlers               []func(*Ctx)
 	searchingOnAttachedCtx int32
+	app                    *GoBlaze
+	response               *fasthttp.Response
+	*fasthttp.RequestCtx
 
 	index int
 
-	handlers []func(*Ctx)
-
-	*fasthttp.RequestCtx
+	next     bool
+	skipView bool
 }
 
 func ReleaseRequestCtx(ctx *Ctx) {
