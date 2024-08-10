@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/GoBlaze/goblaze/pool"
 	"github.com/valyala/fasthttp"
@@ -135,10 +134,10 @@ func (c *Ctx) Next() { // begin for skip all middlewares
 
 }
 
-func (c *Ctx) Query(key string) string {
+func (c *Ctx) Query(key string) []byte {
 	r := c.RequestCtx.QueryArgs().Peek(key)
 
-	return *(*string)(unsafe.Pointer(&r))
+	return r
 
 }
 

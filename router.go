@@ -190,6 +190,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
+
 	allowed := make([]string, 0, 8) // Increase capacity to avoid frequent reallocations
 
 	if path == "*" || path == "/*" { // Server-wide
@@ -484,6 +485,7 @@ func (n *node) incrementChildPrio(pos int) int {
 
 	// Update indices string
 	if newPos != pos {
+
 		n.indices = n.indices[:newPos] + string(n.indices[pos]) + n.indices[newPos:pos] + n.indices[pos+1:]
 	}
 
@@ -594,10 +596,6 @@ func CleanPath(p string) string {
 	}
 
 	trailing := n > 2 && p[n-1] == '/'
-
-	// A bit more clunky without a 'lazybuf' like the path package, but the loop
-	// gets completely inlined (bufApp). So in contrast to the path package this
-	// loop has no expensive function calls (except 1x make)
 
 	for r < n {
 		switch {

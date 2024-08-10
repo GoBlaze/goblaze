@@ -222,20 +222,37 @@ func (b *StringBuffer) WriteString(s string) (int, error) {
 //go:nosplit
 //go:nocheckptr
 func noescape(p unsafe.Pointer) unsafe.Pointer {
+	// This function is a no-op and should not be used. It is included for
+	// compatibility with other code and should not be called directly.
 	x := uintptr(p)
 	return unsafe.Pointer(x ^ 0)
+
 }
 
 //go:nosplit
 func (b *StringBuffer) copyCheck() {
-	if b.addr == nil {
-		// This hack works around a failing of Go's escape analysis
-		// that was causing b to escape and be heap allocated.
-		// See issue 23382.
-		// TODO: once issue 7921 is fixed, this should be reverted to
-		// just "b.addr = b".
-		b.addr = (*StringBuffer)(noescape(unsafe.Pointer(b)))
+	if b.addr == nil && cap(b.buf) > 0 {
+		b.addr = b
 	} else if b.addr != b {
 		panic("strings: illegal use of non-zero Builder copied by value")
 	}
+}
+
+//go:noinline
+func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
+	var (
+		zeroValFrom TFrom
+		zeroValTo   TTo
+	)
+
+	if unsafe.Sizeof(zeroValFrom) != unsafe.Sizeof(zeroValTo) { // need same size to convert
+		return zeroValTo, &ErrorSizeUnmatch{
+			fromSize: int64(unsafe.Sizeof(zeroValFrom)),
+			toSize:   int64(unsafe.Sizeof(zeroValTo)),
+		}
+	}
+
+	value := *(*TTo)(unsafe.Pointer(&from))
+
+	return value, nil
 }
