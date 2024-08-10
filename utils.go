@@ -167,18 +167,26 @@ func (b *StringBuffer) Bytes() []byte {
 	return b.buf
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) Len() int {
 	return len(b.buf)
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) Cap() int {
 	return cap(b.buf)
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0]
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
 	copy(buf, b.buf)
@@ -194,18 +202,24 @@ func (b *StringBuffer) Grow(n int) {
 	}
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) Write(p []byte) (int, error) {
 	b.copyCheck()
 	b.buf = append(b.buf, p...)
 	return len(p), nil
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) WriteByte(c byte) error {
 	b.copyCheck()
 	b.buf = append(b.buf, c)
 	return nil
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) WriteRune(r rune) (int, error) {
 	b.copyCheck()
 	n := len(b.buf)
@@ -213,6 +227,8 @@ func (b *StringBuffer) WriteRune(r rune) (int, error) {
 	return len(b.buf) - n, nil
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) WriteString(s string) (int, error) {
 	b.copyCheck()
 	b.buf = append(b.buf, s...)
@@ -231,8 +247,9 @@ func noescape(p unsafe.Pointer) unsafe.Pointer {
 
 //go:nosplit
 func (b *StringBuffer) copyCheck() {
-	if b.addr == nil && cap(b.buf) > 0 {
-		b.addr = b
+	if b.addr == nil {
+
+		b.addr = (*StringBuffer)(noescape(unsafe.Pointer(b)))
 	} else if b.addr != b {
 		panic("strings: illegal use of non-zero Builder copied by value")
 	}

@@ -23,16 +23,18 @@ func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get()
 
 	actx.RequestCtx = ctx // Set the incoming RequestCtx
+
 	return actx
 }
 
 var attachedCtxKey = fmt.Sprintf("__attachedCtx::%x__", time.Now().UnixNano())
 
 type Ctx struct {
-	noCopy                 No // nolint:structcheck,unused
-	pnames                 [32]string
-	pvalues                [32]string
-	handlers               []func(*Ctx)
+	noCopy   No // nolint:structcheck,unused
+	pnames   [32]string
+	pvalues  [32]string
+	handlers []func(*Ctx)
+
 	searchingOnAttachedCtx int32
 	app                    *GoBlaze
 	response               *fasthttp.Response

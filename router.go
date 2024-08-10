@@ -34,11 +34,12 @@ type Router struct {
 }
 
 type node struct {
-	noCopy    No // nolint:structcheck,unused
-	children  []*node
-	path      string
-	indices   string
-	priority  int
+	noCopy   No // nolint:structcheck,unused
+	children []*node
+	path     string
+	indices  string
+	priority int
+
 	handle    Handler
 	wildChild bool
 	nType     nodeType
