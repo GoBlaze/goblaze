@@ -1,9 +1,9 @@
 package goblaze
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 
@@ -47,9 +47,9 @@ func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string)
 
 	// server.log.Printf("Listening on: http://%s/", addr)
 
-	if len(logLevel) > 0 {
-		server.log.SetLevel(logrus.Level(logrus.DebugLevel))
-	}
+	// if len(logLevel) > 0 {
+	// 	server.log.SetLevel(logrus.Level(logrus.DebugLevel))
+	// }
 
 	if err := server.server.ListenAndServe(addr); err != nil {
 		server.log.Fatalf("Server error: %v", err)
@@ -97,7 +97,7 @@ func (server *GoBlaze) HttpResponse(ctx *Ctx, response []byte, statusCode ...int
 }
 
 func (server *GoBlaze) Shutdown() error {
-	return server.server.Shutdown()
+	return server.server.ShutdownWithContext(context.Background())
 }
 
 // func (app *GoBlaze) printRoutesMessage() {

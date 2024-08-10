@@ -78,7 +78,6 @@ func NewRouter() *Router {
 func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 	customCtx := AcquireRequestCtx(ctx) // nolint:ifshort
-	defer ReleaseRequestCtx(customCtx)
 
 	handler := r.handleRequest(customCtx)
 	if handler != nil {
@@ -88,6 +87,7 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		ctx.Error("Not Found", fasthttp.StatusNotFound)
 	}
+	defer ReleaseRequestCtx(customCtx)
 }
 
 // handleRequest finds the handler for the request.
@@ -191,42 +191,35 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
+	var allowed []string
 
-	allowed := make([]string, 0, 8) // Increase capacity to avoid frequent reallocations
-
-	if path == "*" || path == "/*" { // Server-wide
+	if path == "*" || path == "/*" {
 		for method := range r.trees {
-			if method == "OPTIONS" {
-				continue
-			}
-			allowed = append(allowed, method)
-		}
-	} else { // Specific path
-		for method := range r.trees {
-			if method == reqMethod || method == "OPTIONS" {
-				continue
-			}
-			handle, _ := r.trees[method].getValue(path)
-			if handle != nil {
+			if method != "OPTIONS" {
 				allowed = append(allowed, method)
+			}
+		}
+	} else {
+		for method := range r.trees {
+			if method != reqMethod && method != "OPTIONS" {
+				if handle, _ := r.trees[method].getValue(path); handle != nil {
+					allowed = append(allowed, method)
+				}
 			}
 		}
 	}
 
-	// Add OPTIONS method to the allowed list
 	if len(allowed) > 0 {
 		allowed = append(allowed, "OPTIONS")
 	}
 
-	// Sort methods
 	sort.Strings(allowed)
 
-	// also available for string.builder
 	var builder *StringBuffer
+	builder.Grow(len(allowed))
 	for i, method := range allowed {
 		if i > 0 {
 			builder.WriteString(", ")
-
 		}
 		builder.WriteString(method)
 	}
@@ -484,7 +477,6 @@ func (n *node) incrementChildPrio(pos int) int {
 		newPos--
 	}
 
-	// Update indices string
 	if newPos != pos {
 
 		n.indices = n.indices[:newPos] + string(n.indices[pos]) + n.indices[newPos:pos] + n.indices[pos+1:]

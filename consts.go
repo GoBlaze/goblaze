@@ -1,5 +1,7 @@
 package goblaze
 
+import "github.com/GoBlaze/goblaze/constants"
+
 var goblazeW = `
   
                                                 
@@ -35,3 +37,7 @@ var DefaultColors = Colors{
 	White:   "\u001b[97m",
 	Reset:   "\u001b[0m",
 }
+
+const cacheLinePadSize = constants.CacheLinePadSize
+
+type cacheLinePadding struct{ _ [cacheLinePadSize]byte }

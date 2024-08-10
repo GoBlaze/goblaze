@@ -10,7 +10,8 @@ import (
 type ErrorSizeUnmatch struct {
 	fromLength int
 	fromSize   int64
-	toSize     int64
+
+	toSize int64
 }
 
 func (err *ErrorSizeUnmatch) Error() string {
@@ -147,6 +148,7 @@ type StringBuffer struct {
 	noCopy No // nolint:structcheck
 	buf    []byte
 	addr   *StringBuffer
+	_      cacheLinePadding
 }
 
 func NewStringBuffer(cap int) *StringBuffer {
@@ -193,6 +195,8 @@ func (b *StringBuffer) grow(n int) {
 	b.buf = buf
 }
 
+//go:nosplit
+//go:inline
 func (b *StringBuffer) Grow(n int) {
 	if n < 0 {
 		panic("fast.StringBuffer.Grow: negative count")

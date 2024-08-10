@@ -34,13 +34,13 @@ type Ctx struct {
 	pnames   [32]string
 	pvalues  [32]string
 	handlers []func(*Ctx)
+	index    int
 
 	searchingOnAttachedCtx int32
-	app                    *GoBlaze
-	response               *fasthttp.Response
-	*fasthttp.RequestCtx
 
-	index int
+	app      *GoBlaze
+	response *fasthttp.Response
+	*fasthttp.RequestCtx
 
 	next     bool
 	skipView bool

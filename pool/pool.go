@@ -11,7 +11,9 @@ func (*No) Unlock() {}
 
 type Pool[T any] struct {
 	noCopy No // nolint:structcheck,unused
-	items  *sync.Pool
+
+	items *sync.Pool
+	_     cacheLinePadding
 }
 
 // New creates a new Pool[T] with the given function to create new items.
