@@ -233,9 +233,7 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 }
 
 func (r *Router) Handle(method, path string, handle Handler) {
-	if path[0] != '/' {
-		panic("path must begin with '/' in path '" + path + "'")
-	}
+	validatePath(path)
 
 	if r.trees == nil {
 		r.trees = make(map[string]*node)
