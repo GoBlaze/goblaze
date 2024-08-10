@@ -156,13 +156,13 @@ func (c *Ctx) App() *GoBlaze {
 	return c.app
 }
 
-func (c *Ctx) ParseJSON(jsonStr string) (map[string]interface{}, error) {
-	cstr := C.CString(jsonStr)
+// func (c *Ctx) ParseJSON(jsonStr string) (map[string]interface{}, error) {
+// 	cstr := C.CString(jsonStr)
 
-	C.cJSON_Parse(cstr)
+// 	C.cJSON_Parse(cstr)
 
-	return result, nil
-}
+//		return result, nil
+//	}
 func (ctx *Ctx) HttpResponse(response []byte, statusCode ...int) error {
 	ctx.SetContentType("text/html; charset=utf-8")
 

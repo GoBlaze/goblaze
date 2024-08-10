@@ -3,6 +3,7 @@ package goblaze
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/valyala/fasthttp"
 )
@@ -17,11 +18,10 @@ type GoBlaze struct {
 	middleware []Middleware
 	server     *fasthttp.Server
 	router     *Router
-	log        *logrusLogger
+	// log        *logrusLogger // make nice realization with 0 allocation later
 }
 
 func New() *GoBlaze {
-	log := NewLog()
 
 	router := NewRouter()
 
@@ -33,7 +33,6 @@ func New() *GoBlaze {
 			Handler: router.ServeHTTP,
 			Name:    "goblaze",
 		},
-		log: log,
 	}
 
 	return server
@@ -52,7 +51,7 @@ func (server *GoBlaze) ListenAndServe(host string, port int, logLevel ...string)
 	// }
 
 	if err := server.server.ListenAndServe(addr); err != nil {
-		server.log.Fatalf("Server error: %v", err)
+		log.Fatalf("Server error: %v", err)
 	}
 
 	// go server.printRoutesMessage()

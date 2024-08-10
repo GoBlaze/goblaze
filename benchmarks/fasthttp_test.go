@@ -34,7 +34,7 @@ func BenchmarkFasthttpServer(b *testing.B) {
 		req := fasthttp.AcquireRequest()
 		resp := fasthttp.AcquireResponse()
 
-		req.SetRequestURI(fmt.Sprintf("http://localhost:%d/", port))
+		req.SetRequestURI("http://localhost:8086/")
 
 		if err := client.Do(req, resp); err != nil {
 			b.Fatalf("Error making request: %s", err)
