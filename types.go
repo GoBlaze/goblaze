@@ -1,8 +1,15 @@
 package goblaze
 
 import (
-	"github.com/valyala/fasthttp"
+	"net"
+	"time"
+
+	"github.com/GoBlaze/goblaze/fasthttp"
 )
+
+const DefaultMaxRequestBodySize = 4 * 1024 * 1024
+
+var zeroTime time.Time
 
 type No struct{}
 
@@ -11,8 +18,19 @@ func (*No) Lock() {}
 func (*No) Unlock() {}
 
 // Handler defines a function to serve HTTP requests.
+type PanicHandler func(*Ctx, interface{})
 type Handler func(ctx *Ctx) error
-type RequestHandler func(*fasthttp.RequestHandler)
+type RequestHandler func(*fasthttp.RequestCtx)
+type ErrorView func(*Ctx, error, int)
+type FormValueFunc func(*Ctx, string) []byte
+type ServeHandler func(c net.Conn) error
+type HijackHandler func(c net.Conn)
+
+type ErrNothingRead struct {
+	error
+}
+
+// ErrNothingRead is returned when a keep-alive connection is closed, either because the remote closed it or because of a read timeout.
 
 type JSON map[string]any
 

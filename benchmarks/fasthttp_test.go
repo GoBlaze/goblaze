@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/valyala/fasthttp"
+	"github.com/GoBlaze/goblaze/fasthttp"
 )
 
 func BenchmarkFasthttpServer(b *testing.B) {

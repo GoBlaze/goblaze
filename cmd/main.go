@@ -13,7 +13,7 @@ import (
 	"runtime"
 
 	"github.com/GoBlaze/goblaze"
-	"github.com/valyala/fasthttp"
+	"github.com/GoBlaze/goblaze/fasthttp"
 
 	"github.com/sirupsen/logrus"
 )
@@ -95,24 +95,24 @@ func main() {
 	result := C.add(1, 2)
 	logrus.Errorf("Result: %d\n", result)
 
-	ctx := goblaze.NewJSONContext()
+	// ctx := goblaze.NewJSONContext()
 
-	ctx.AddString("first", "Yuki")
-	ctx.AddString("second", "Nagato")
+	// ctx.AddString("first", "Yuki")
+	// ctx.AddString("second", "Nagato")
 
-	jsonOutput := ctx.Print()
-	logrus.Errorf("Result: %s\n", jsonOutput)
+	// jsonOutput := ctx.Print()
+	// logrus.Errorf("Result: %s\n", jsonOutput)
 
-	jsonString := `{"toilet": "lol", "nineplusten": 21}`
-	parsedCtx  := goblaze.ParseJSON(jsonString)
+	// jsonString := `{"toilet": "lol", "nineplusten": 21}`
+	// parsedCtx := goblaze.ParseJSON(jsonString)
 
-	defer parsedCtx.Delete()
+	// defer parsedCtx.Delete()
 
-	name := parsedCtx.GetString("toilet")
-	logrus.Errorf("%s\n", name)
+	// name := parsedCtx.GetString("toilet")
+	// logrus.Errorf("%s\n", name)
 
-	age := parsedCtx.GetInt("nineplusten")
-	logrus.Errorf("%d\n", age)
+	// age := parsedCtx.GetInt("nineplusten")
+	// logrus.Errorf("%d\n", age)
 
 	server := goblaze.New()
 

@@ -3,7 +3,7 @@ package goblaze
 import (
 	"sort"
 
-	"github.com/valyala/fasthttp"
+	"github.com/GoBlaze/goblaze/fasthttp"
 )
 
 type Router struct {
@@ -19,11 +19,11 @@ type Router struct {
 
 	Path string
 
-	NotFound fasthttp.RequestHandler
+	NotFound Handler
 
-	MethodNotAllowed fasthttp.RequestHandler
+	MethodNotAllowed Handler
 
-	PanicHandler func(*fasthttp.RequestCtx, interface{})
+	PanicHandler PanicHandler
 
 	RedirectTrailingSlash bool
 
@@ -47,7 +47,8 @@ type node struct {
 	handle Handler
 
 	wildChild bool
-	nType     nodeType
+
+	nType nodeType
 
 	maxParams uint8
 }
@@ -63,13 +64,15 @@ func min(a, b int) int {
 
 func countParams(path string) (n uint8) {
 	for i := 0; i < len(path); i++ {
+		// Check if the current character is ':' or '*'.
 		if path[i] == ':' || path[i] == '*' {
+			// Increment the count.
 			n++
 		}
 	}
-	return
+	// Return the count.
+	return n
 }
-
 func NewRouter() *Router {
 	return &Router{
 
@@ -107,7 +110,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 			if len(allow) > 0 {
 				ctx.response.Header.Set("Allow", allow)
 				if r.MethodNotAllowed != nil {
-					r.MethodNotAllowed(ctx.RequestCtx)
+					r.MethodNotAllowed(ctx)
 				} else {
 					ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
 					ctx.SetContentType("text/plain")
@@ -181,7 +184,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 		if len(allow) > 0 {
 			ctx.response.Header.Set("Allow", allow)
 			if r.MethodNotAllowed != nil {
-				r.MethodNotAllowed(ctx.RequestCtx)
+				r.MethodNotAllowed(ctx)
 			} else {
 				ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
 				ctx.SetContentType("text/plain")
@@ -195,7 +198,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
-	allowed := make([]string, 0, len(r.trees))
+	allowed := MakeNoZeroCapString(0, len(r.trees))
 
 	if path == "*" || path == "/*" {
 		for method := range r.trees {
@@ -218,7 +221,7 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 	}
 	sort.Strings(allowed)
 
-	var builder *StringBuffer
+	var builder = NewStringBuffer(len(allowed))
 
 	for i, method := range allowed {
 		if i > 0 {
@@ -588,7 +591,7 @@ func CleanPath(p string) string {
 
 	if p[0] != '/' {
 		r = 0
-		buf = make([]byte, n+1)
+		buf = MakeNoZero(n + 1)
 		buf[0] = '/'
 	}
 
@@ -660,7 +663,7 @@ func CleanPath(p string) string {
 func bufApp(buf *[]byte, s string, w int, c byte) {
 
 	if *buf == nil || len(*buf) <= w {
-		newBuf := make([]byte, w+1)
+		newBuf := MakeNoZero(w + 1)
 
 		if *buf == nil {
 			copy(newBuf, s)
@@ -676,7 +679,7 @@ func bufApp(buf *[]byte, s string, w int, c byte) {
 	}
 
 	if cap(*buf) <= w {
-		newBuf := make([]byte, w+1)
+		newBuf := MakeNoZero(w + 1)
 		copy(newBuf, *buf)
 		*buf = newBuf
 	}

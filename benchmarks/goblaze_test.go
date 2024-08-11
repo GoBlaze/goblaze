@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/GoBlaze/goblaze"
-	"github.com/valyala/fasthttp"
+	"github.com/GoBlaze/goblaze/fasthttp"
 )
 
 func helloHandler(ctx *goblaze.Ctx) error {

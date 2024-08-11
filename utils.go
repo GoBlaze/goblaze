@@ -30,26 +30,22 @@ func validatePath(path string) string {
 	return path
 }
 
-//go:inline
-//go:nosplit
+//go:noinline
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-//go:inline
-//go:nosplit
+//go:noinline
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
-//go:inline
-//go:nosplit
+//go:noinline
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
-//go:inline
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -144,9 +140,18 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 //go:noinline
-//go:nosplit
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
+}
+
+//go:noinline
+func MakeNoZeroString(l int) []string {
+	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
+}
+
+//go:inline
+func MakeNoZeroCapString(l int, c int) []string {
+	return MakeNoZeroString(c)[:l]
 }
 
 //go:inline
@@ -175,7 +180,7 @@ type StringBuffer struct {
 
 func NewStringBuffer(cap int) *StringBuffer {
 	return &StringBuffer{
-		buf: make([]byte, 0, cap),
+		buf: MakeNoZeroCap(0, cap),
 	}
 }
 
@@ -199,7 +204,6 @@ func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
-//go:nosplit
 //go:inline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
@@ -279,8 +283,6 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
-//go:nosplit
-//go:nocheckptr
 //go:noinline
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 	converted, err := ConvertOne[TFrom, TTo](from)
