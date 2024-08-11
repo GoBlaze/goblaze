@@ -1,10 +1,14 @@
 package goblaze
 
-// #cgo CFLAGS: -I ./ccode
-// #cgo LDFLAGS: -L ./ccode/ -lother
-// #include <stdlib.h>
-// #include "cJSON.h"
-
+/*
+#cgo CFLAGS: -I./ccode
+#cgo LDFLAGS: -L./ccode/cJSON.o -lother
+#include "cJSON.h"
+#include <stdlib.h>
+*/
+import (
+	"C"
+)
 import (
 	"C"
 	"context"
@@ -13,6 +17,8 @@ import (
 	"time"
 
 	"sync/atomic"
+
+	"unsafe"
 
 	"github.com/GoBlaze/goblaze/pool"
 	"github.com/valyala/fasthttp"
@@ -103,7 +109,7 @@ func (c *Ctx) Method() []byte {
 }
 
 // func (c *Ctx) SetContentType(contentType string) {
-// 	c.response.Header.SetContentType(contentType)
+//	c.response.Header.SetContentType(contentType)
 // }
 
 func (c *Ctx) SetStatusCode(statusCode int) {
@@ -157,9 +163,9 @@ func (c *Ctx) App() *GoBlaze {
 }
 
 // func (c *Ctx) ParseJSON(jsonStr string) (map[string]interface{}, error) {
-// 	cstr := C.CString(jsonStr)
+//	cstr := C.CString(jsonStr)
 
-// 	C.cJSON_Parse(cstr)
+//	C.cJSON_Parse(cstr)
 
 //		return result, nil
 //	}
@@ -176,4 +182,62 @@ func (ctx *Ctx) HttpResponse(response []byte, statusCode ...int) error {
 
 	_, err := ctx.RequestCtx.Write(response)
 	return err
+}
+
+type JSONContext struct {
+	jsonObj *C.cJSON
+}
+
+func NewJSONContext() *JSONContext {
+	obj := C.cJSON_CreateObject()
+
+	return &JSONContext{jsonObj: obj}
+}
+
+func ParseJSON(jsonStr string) *JSONContext {
+	cJsonStr := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJsonStr))
+
+	jsonObj := C.cJSON_Parse(cJsonStr)
+
+	return &JSONContext{jsonObj: jsonObj}
+}
+
+func (ctx *JSONContext) GetString(key string) string {
+	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
+
+	item := C.cJSON_GetObjectItem(ctx.jsonObj, cKey)
+
+	return C.GoString(item.valuestring)
+}
+
+func (ctx *JSONContext) GetInt(key string) int {
+	cKey := C.CString(key)
+	defer C.free(unsafe.Pointer(cKey))
+
+	item := C.cJSON_GetObjectItem(ctx.jsonObj, cKey)
+
+	return int(item.valueint)
+}
+
+func (ctx *JSONContext) AddString(key, value string) {
+	cKey := C.CString(key)
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cKey))
+	defer C.free(unsafe.Pointer(cValue))
+
+	C.cJSON_AddStringToObject(ctx.jsonObj, cKey, cValue)
+}
+
+func (ctx *JSONContext) Print() string {
+	jsonString := C.cJSON_Print(ctx.jsonObj)
+	result := C.GoString(jsonString)
+	C.free(unsafe.Pointer(jsonString))
+
+	return result
+}
+
+func (ctx *JSONContext) Delete() {
+	C.cJSON_Delete(ctx.jsonObj)
 }
