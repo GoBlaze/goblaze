@@ -10,13 +10,13 @@ C_INCLUDE_DIR=./ccode/
 build: build-c build-go
 
 build-go:
-	@echo "\033[0;32mBuilding Go code...\033[0m"
+	@echo -e "\033[0;32mBuilding Go code...\033[0m"
 	@go build -o $(BINARY) ./cmd/main.go
 
 build-c: $(C_OBJ)
-	@echo "\033[0;32mBuilding C code...\033[0m"
+	@echo -e "\033[0;32mBuilding C code...\033[0m"
 	@ar rcs $(C_LIB) $(C_OBJ)
-	@echo "\033[0;32mC code built successfully\033[0m"
+	@echo -e "\033[0;32mC code built successfully\033[0m"
 
 %.o: %.c
 	@echo "Compiling $< to $@..."
