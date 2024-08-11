@@ -291,3 +291,13 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 	}
 	return converted
 }
+
+//go:noinline
+func isEqual(v1, v2 any) bool {
+	return reflect.ValueOf(v1).Pointer() == reflect.ValueOf(v2).Pointer()
+}
+
+//go:noinline
+func isNil(v any) bool {
+	return reflect.ValueOf(v).IsNil()
+}

@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/GoBlaze/goblaze/tick"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
@@ -279,7 +281,7 @@ type FS struct {
 	// If CleanStop is set, the channel can be closed to stop the cleanup handlers
 	// for the FS RequestHandlers created with NewRequestHandler.
 	// NEVER close this channel while the handler is still being used!
-	CleanStop chan struct{}
+	CleanStop *zenq.ZenQ[struct{}]
 
 	h RequestHandler
 
@@ -642,12 +644,12 @@ func (r *bigFileReader) UpdateByteRange(startPos, endPos int) error {
 	if !ok {
 		return errors.New("must implement io.Seeker")
 	}
-	if _, err := seeker.Seek(int64(startPos), io.SeekStart); err != nil {
+	if _, err := seeker.Seek(MustConvertOne[int, int64](startPos), io.SeekStart); err != nil {
 		return err
 	}
 	r.r = &r.lr
 	r.lr.R = r.f
-	r.lr.N = int64(endPos - startPos + 1)
+	r.lr.N = MustConvertOne[int, int64](endPos - startPos + 1)
 	return nil
 }
 
@@ -727,7 +729,7 @@ func (r *fsSmallFileReader) Read(p []byte) (int, error) {
 		if !ok {
 			return 0, errors.New("must implement io.ReaderAt")
 		}
-		n, err := ra.ReadAt(p, int64(r.startPos))
+		n, err := ra.ReadAt(p, MustConvertOne[int, int64](r.startPos))
 		r.startPos += n
 		return n, err
 	}
@@ -744,7 +746,7 @@ func (r *fsSmallFileReader) WriteTo(w io.Writer) (int64, error) {
 	var err error
 	if ff.f == nil {
 		n, err = w.Write(ff.dirIndex[r.startPos:r.endPos])
-		return int64(n), err
+		return MustConvertOne[int, int64](n), err
 	}
 
 	if rf, ok := w.(io.ReaderFrom); ok {
@@ -911,26 +913,20 @@ func (cm *inMemoryCacheManager) SetFileToCache(cacheKind CacheKind, path string,
 	return ff
 }
 
-func (cm *inMemoryCacheManager) handleCleanCache(cleanStop chan struct{}) {
+func (cm *inMemoryCacheManager) handleCleanCache(cleanStop *zenq.ZenQ[struct{}]) {
 	var pendingFiles []*fsFile
 
 	clean := func() {
 		pendingFiles = cm.cleanCache(pendingFiles)
 	}
+	cleanStop = zenq.New[struct{}](0)
 
 	if cleanStop != nil {
-		t := time.NewTicker(cm.cacheDuration / 2)
+		t := tick.NewTicker(cm.cacheDuration / 2)
+
 		for {
-			select {
-			case <-t.C:
-				clean()
-			case _, stillOpen := <-cleanStop:
-				// Ignore values send on the channel, only stop when it is closed.
-				if !stillOpen {
-					t.Stop()
-					return
-				}
-			}
+			zenq.Select(cleanStop, t.C)
+
 		}
 	}
 	for {
@@ -1621,7 +1617,7 @@ func (h *fsHandler) openFSFile(filePath string, mustCompress bool, fileEncoding 
 func (h *fsHandler) newFSFile(f fs.File, fileInfo fs.FileInfo, compressed bool, filePath, fileEncoding string) (*fsFile, error) {
 	n := fileInfo.Size()
 	contentLength := int(n)
-	if n != int64(contentLength) {
+	if n != MustConvertOne[int, int64](contentLength) {
 		_ = f.Close()
 		return nil, fmt.Errorf("too big file: %d bytes", n)
 	}
