@@ -38,9 +38,9 @@ func helloHandler(ctx *goblaze.Ctx) error {
 }
 
 // func ParseJson(ctx *goblaze.Ctx) error {
-// 	ctx.ParseJSON("fjafjajf")
+//	ctx.ParseJSON("fjafjajf")
 
-// 	return nil
+//	return nil
 // }
 
 func helloHandler2(ctx *goblaze.Ctx) error {
@@ -94,6 +94,25 @@ func main() {
 	}
 	result := C.add(1, 2)
 	logrus.Errorf("Result: %d\n", result)
+
+	ctx := goblaze.NewJSONContext()
+
+	ctx.AddString("first", "Yuki")
+	ctx.AddString("second", "Nagato")
+
+	jsonOutput := ctx.Print()
+	logrus.Errorf("Result: %s\n", jsonOutput)
+
+	jsonString := `{"toilet": "lol", "nineplusten": 21}`
+	parsedCtx  := goblaze.ParseJSON(jsonString)
+
+	defer parsedCtx.Delete()
+
+	name := parsedCtx.GetString("toilet")
+	logrus.Errorf("%s\n", name)
+
+	age := parsedCtx.GetInt("nineplusten")
+	logrus.Errorf("%d\n", age)
 
 	server := goblaze.New()
 
