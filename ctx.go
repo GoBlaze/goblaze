@@ -1,6 +1,12 @@
 package goblaze
 
+// #cgo CFLAGS: -I ./ccode
+// #cgo LDFLAGS: -L ./ccode/ -lother
+// #include <stdlib.h>
+// #include "cJSON.h"
+
 import (
+	"C"
 	"context"
 	"fmt"
 
@@ -41,8 +47,10 @@ type Ctx struct {
 	paramValues map[string]string
 
 	app *GoBlaze
+	s   *Server
 
 	response *fasthttp.Response
+	request  *fasthttp.Request
 
 	*fasthttp.RequestCtx
 
