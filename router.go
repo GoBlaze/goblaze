@@ -7,16 +7,17 @@ import (
 )
 
 type Router struct {
-	noCopy No // nolint:structcheck,unused
+	_ No // nolint:structcheck,unused
 
-	Handlers []Handler
 	// pool *sync.Pool
 
-	trees   map[string]*node
-	Method  string
-	Name    string
-	Path    string
-	Handler func(*Ctx)
+	trees map[string]*node
+
+	Method string
+
+	Name string
+
+	Path string
 
 	NotFound fasthttp.RequestHandler
 
@@ -34,13 +35,17 @@ type Router struct {
 }
 
 type node struct {
-	noCopy   No // nolint:structcheck,unused
+	_        No // nolint:structcheck,unused
 	children []*node
-	path     string
-	indices  string
+
+	path string
+
+	indices string
+
 	priority int
 
-	handle    Handler
+	handle Handler
+
 	wildChild bool
 	nType     nodeType
 
@@ -90,7 +95,6 @@ func (r *Router) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	ReleaseRequestCtx(customCtx)
 }
 
-// handleRequest finds the handler for the request.
 func (r *Router) handleRequest(ctx *Ctx) Handler {
 	method := String(ctx.Method())
 	path := String(ctx.Path())
@@ -191,7 +195,7 @@ func (r *Router) handleRequest(ctx *Ctx) Handler {
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {
-	allowed := make([]string, 0, 10)
+	allowed := make([]string, 0, len(r.trees))
 
 	if path == "*" || path == "/*" {
 		for method := range r.trees {
@@ -212,11 +216,10 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 	if len(allowed) > 0 {
 		allowed = append(allowed, "OPTIONS")
 	}
-
 	sort.Strings(allowed)
 
 	var builder *StringBuffer
-	builder.Grow(len(allowed))
+
 	for i, method := range allowed {
 		if i > 0 {
 			builder.WriteString(", ")
@@ -340,6 +343,7 @@ func (n *node) addRoute(path string, handle Handler) {
 				}
 
 				if c != ':' && c != '*' {
+
 					n.indices += string(c) // Convert byte to string directly
 					child := &node{
 						maxParams: numParams,
@@ -654,29 +658,28 @@ func CleanPath(p string) string {
 
 // bufApp appends a byte to the buffer if it's not already there.
 func bufApp(buf *[]byte, s string, w int, c byte) {
-	// If the buffer is nil, create a new one and copy the prefix.
-	if *buf == nil || len(*buf) < w {
-		*buf = make([]byte, len(s)+1)
+
+	if *buf == nil || len(*buf) <= w {
+		newBuf := make([]byte, w+1)
+
 		if *buf == nil {
-			*buf = make([]byte, len(s))
-			copy(*buf, s)
-			*buf = (*buf)[:w]
-		}
-
-		// If the buffer already has the byte at the right position, we're done.
-		if (*buf)[w] == c {
-			return
-		}
-
-		// If the buffer is too short, reallocate it.
-		if cap(*buf) <= w {
-			newBuf := make([]byte, len(s), (3*len(s))/2+1)
+			copy(newBuf, s)
+		} else {
 			copy(newBuf, *buf)
-			*buf = newBuf
 		}
 
-		// Append the byte.
-		(*buf)[w] = c
+		*buf = newBuf
 	}
 
+	if (*buf)[w] == c {
+		return
+	}
+
+	if cap(*buf) <= w {
+		newBuf := make([]byte, w+1)
+		copy(newBuf, *buf)
+		*buf = newBuf
+	}
+
+	(*buf)[w] = c
 }

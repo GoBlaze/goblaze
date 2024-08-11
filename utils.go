@@ -33,6 +33,7 @@ func validatePath(path string) string {
 //go:inline
 //go:nosplit
 func String(b []byte) string {
+
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
@@ -49,13 +50,26 @@ func CopyBytes(b []byte) []byte {
 }
 
 //go:inline
-//go:nosplit
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
 
-//go:inline
-//go:nosplit
+// go:nosplit is a compiler directive that tells the Go compiler to
+// prevent the function from being split into multiple machine
+// instructions. This is useful for code that needs to be fast and
+// efficient.
+//
+// In this case, the function is marked with go:nosplit so that it
+// won't be split into multiple machine instructions, which can
+// improve performance.
+//
+// Note: go:nosplit should be used with caution, as it can sometimes
+// lead to code that is slower than code that is split into multiple
+// machine instructions.
+//
+// For more information, see: https://pkg.go.dev/cmd/compile#hdr-Compiler_Directives
+//
+
 func CopyString(s string) string {
 	c := make([]byte, len(s))
 	copy(c, StringToBytes(s))
@@ -119,13 +133,22 @@ func swap[T any](a, b *T) {
 //go:linkname mallocgc runtime.mallocgc
 func mallocgc(size uintptr, typ unsafe.Pointer, needzero bool) unsafe.Pointer
 
+//go:linkname sysFree runtime.sysFree
+func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
+
+//go:linkname sysFreeOS runtime.sysFreeOS
+func sysFreeOS(v unsafe.Pointer, n uintptr)
+
+// inline is a compiler hint that tells the compiler to inline the function.
+// This can result in faster execution, but it can also increase the size of the executable.
+// The compiler is free to ignore this hint, so it should not be relied upon.
+//
+//go:noinline
 //go:nosplit
-//go:inline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:nosplit
 //go:inline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
@@ -145,10 +168,9 @@ func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 }
 
 type StringBuffer struct {
-	noCopy No // nolint:structcheck
-	buf    []byte
-	addr   *StringBuffer
-	_      cacheLinePadding
+	_    No // nolint:structcheck
+	buf  []byte
+	addr *StringBuffer
 }
 
 func NewStringBuffer(cap int) *StringBuffer {
@@ -157,34 +179,24 @@ func NewStringBuffer(cap int) *StringBuffer {
 	}
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) String() string {
 	return String(b.buf)
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Bytes() []byte {
 	return b.buf
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Len() int {
 	return len(b.buf)
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Cap() int {
 	return cap(b.buf)
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Reset() {
-	b.buf = b.buf[:0]
+	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
 //go:nosplit
@@ -195,35 +207,32 @@ func (b *StringBuffer) grow(n int) {
 	b.buf = buf
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Grow(n int) {
+	// Check if n is negative
 	if n < 0 {
+		// Panic with the message "fast.StringBuffer.Grow: negative count"
 		panic("fast.StringBuffer.Grow: negative count")
 	}
+
+	// Check if the buffer's available capacity is less than n
 	if cap(b.buf)-len(b.buf) < n {
+		// Call the grow method to increase the capacity
 		b.grow(n)
 	}
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) Write(p []byte) (int, error) {
 	b.copyCheck()
 	b.buf = append(b.buf, p...)
 	return len(p), nil
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) WriteByte(c byte) error {
 	b.copyCheck()
 	b.buf = append(b.buf, c)
 	return nil
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) WriteRune(r rune) (int, error) {
 	b.copyCheck()
 	n := len(b.buf)
@@ -231,23 +240,14 @@ func (b *StringBuffer) WriteRune(r rune) (int, error) {
 	return len(b.buf) - n, nil
 }
 
-//go:nosplit
-//go:inline
 func (b *StringBuffer) WriteString(s string) (int, error) {
 	b.copyCheck()
 	b.buf = append(b.buf, s...)
 	return len(s), nil
 }
 
-//go:nosplit
-//go:nocheckptr
-func noescape(p unsafe.Pointer) unsafe.Pointer {
-	// This function is a no-op and should not be used. It is included for
-	// compatibility with other code and should not be called directly.
-	x := uintptr(p)
-	return unsafe.Pointer(x ^ 0)
-
-}
+//go:linkname noescape runtime.noescape
+func noescape(p unsafe.Pointer) unsafe.Pointer
 
 //go:nosplit
 func (b *StringBuffer) copyCheck() {
@@ -259,6 +259,7 @@ func (b *StringBuffer) copyCheck() {
 	}
 }
 
+//go:nocheckptr
 //go:noinline
 func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	var (
@@ -276,4 +277,15 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	value := *(*TTo)(unsafe.Pointer(&from))
 
 	return value, nil
+}
+
+//go:nosplit
+//go:nocheckptr
+//go:noinline
+func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
+	converted, err := ConvertOne[TFrom, TTo](from)
+	if err != nil {
+		panic(err)
+	}
+	return converted
 }

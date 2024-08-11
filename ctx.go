@@ -1,16 +1,12 @@
 package goblaze
 
-// #cgo CFLAGS: -I ./ccode
-// #cgo LDFLAGS: -L ./ccode/ -lother
-// #include <stdlib.h>
-// #include "cJSON.h"
-
 import (
-	"C"
 	"context"
 	"fmt"
-	"sync/atomic"
+
 	"time"
+
+	"sync/atomic"
 
 	"github.com/GoBlaze/goblaze/pool"
 	"github.com/valyala/fasthttp"
@@ -36,26 +32,29 @@ func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 var attachedCtxKey = fmt.Sprintf("__attachedCtx::%x__", time.Now().UnixNano())
 
 type Ctx struct {
-	noCopy   No // nolint:structcheck,unused
-	pnames   [32]string
-	pvalues  [32]string
-	handlers []func(*Ctx)
-	index    int
+	_ No // nolint:structcheck,unused
+
+	index int
 
 	searchingOnAttachedCtx int32
 
-	app      *GoBlaze
+	paramValues map[string]string
+
+	app *GoBlaze
+
 	response *fasthttp.Response
+
 	*fasthttp.RequestCtx
 
-	next     bool
+	next bool
+
 	skipView bool
 }
 
 func ReleaseRequestCtx(ctx *Ctx) {
 	ctx.RequestCtx = nil
-	ctx.next = false
-	ctx.skipView = false
+	// ctx.next = false
+	// ctx.skipView = false // for future
 
 	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
 
@@ -82,13 +81,8 @@ func (ctx *Ctx) AttachedContext() context.Context {
 	extraCtx, _ := ctx.UserValue(attachedCtxKey).(context.Context)
 	return extraCtx
 }
-func (ctx *Ctx) Param(name string) string {
-	for i := len(ctx.pnames) - 1; i >= 0; i-- {
-		if ctx.pnames[i] == name {
-			return ctx.pvalues[i]
-		}
-	}
-	return ""
+func (ctx *Ctx) Param(key string) string {
+	return ctx.paramValues[key]
 }
 
 func (c *Ctx) Response() *fasthttp.Response {
@@ -134,12 +128,10 @@ func (c *Ctx) Context() *fasthttp.RequestCtx {
 	return c.RequestCtx
 }
 
-func (c *Ctx) Next() { // begin for skip all middlewares
-	c.index++
-	if c.index < len(c.handlers) {
-		c.handlers[c.index](c)
-	}
+func (ctx *Ctx) Next() error {
+	ctx.next = true
 
+	return nil
 }
 
 func (c *Ctx) Query(key string) []byte {
