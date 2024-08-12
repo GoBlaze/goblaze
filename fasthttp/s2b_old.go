@@ -10,7 +10,8 @@ import (
 // s2b converts string to a byte slice without memory allocation.
 //
 // Note it may break if string and/or slice header will change
-// in the future go versions.
+//
+//go:noinline
 func s2b(s string) (b []byte) {
 	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))

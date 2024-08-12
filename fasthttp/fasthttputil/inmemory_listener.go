@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"sync"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
 // ErrInmemoryListenerClosed indicates that the InmemoryListener is already closed.
@@ -15,7 +17,7 @@ var ErrInmemoryListenerClosed = errors.New("InmemoryListener is already closed: 
 // without network stack overhead or for client<->server tests.
 type InmemoryListener struct {
 	listenerAddr net.Addr
-	conns        chan acceptConn
+	conns        *zenq.ZenQ[acceptConn]
 	addrLock     sync.RWMutex
 	lock         sync.Mutex
 	closed       bool
@@ -29,7 +31,7 @@ type acceptConn struct {
 // NewInmemoryListener returns new in-memory dialer<->net.Listener.
 func NewInmemoryListener() *InmemoryListener {
 	return &InmemoryListener{
-		conns: make(chan acceptConn, 1024),
+		conns: zenq.New[acceptConn](1024),
 	}
 }
 
@@ -47,7 +49,7 @@ func (ln *InmemoryListener) SetLocalAddr(localAddr net.Addr) {
 //
 // Accept returns new connection per each Dial call.
 func (ln *InmemoryListener) Accept() (net.Conn, error) {
-	c, ok := <-ln.conns
+	c, ok := ln.conns.Read()
 	if !ok {
 		return nil, ErrInmemoryListenerClosed
 	}
@@ -61,7 +63,7 @@ func (ln *InmemoryListener) Close() error {
 
 	ln.lock.Lock()
 	if !ln.closed {
-		close(ln.conns)
+		ln.Close()
 		ln.closed = true
 	} else {
 		err = ErrInmemoryListenerClosed
@@ -117,7 +119,7 @@ func (ln *InmemoryListener) DialWithLocalAddr(local net.Addr) (net.Conn, error) 
 	ln.lock.Lock()
 	accepted := make(chan struct{})
 	if !ln.closed {
-		ln.conns <- acceptConn{conn: sConn, accepted: accepted}
+		ln.conns.Write(acceptConn{conn: sConn, accepted: accepted})
 		// Wait until the connection has been accepted.
 		<-accepted
 	} else {

@@ -46,6 +46,7 @@ func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
+//go:noinline
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -149,12 +150,12 @@ func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:inline
+//go:noinline
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
 
-//go:inline
+//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -204,7 +205,7 @@ func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
-//go:inline
+//go:noinline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
 	copy(buf, b.buf)

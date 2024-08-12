@@ -6,9 +6,9 @@ import (
 	"github.com/GoBlaze/goblaze/pool"
 )
 
-var waitGroupPool = pool.NewPool[*sync.WaitGroup](func() *sync.WaitGroup {
+var waitGroupPool = pool.NewPool[sync.WaitGroup](func() *sync.WaitGroup {
 	return new(sync.WaitGroup)
-})
+}, nil)
 
 func AcquireWaitGroup() *sync.WaitGroup {
 	return waitGroupPool.Get()
@@ -17,6 +17,7 @@ func AcquireWaitGroup() *sync.WaitGroup {
 func ReleaseWaitGroup(wg *sync.WaitGroup) {
 	Reset()
 	waitGroupPool.Put(wg)
+
 }
 
 func Reset() *sync.WaitGroup {

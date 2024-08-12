@@ -2,7 +2,6 @@ package pool
 
 import (
 	"sync"
-	"unsafe"
 )
 
 type No struct{}
@@ -10,32 +9,26 @@ type No struct{}
 func (*No) Lock()   {}
 func (*No) Unlock() {}
 
-// Pool represents a pool of objects with type T.
 type Pool[T any] struct {
-	_ No // nolint:structcheck,unused
-
-	items *sync.Pool
-	_     [cacheLinePadSize - unsafe.Sizeof(&sync.Pool{})%cacheLinePadSize]byte
+	_     No
+	_     cacheLinePadding //nolint:unused
+	pools *sync.Pool
+	put   func(*T)
 }
 
-// NewPool creates a new Pool[T] with a function that creates new objects.
-func NewPool[T any](newFunc func() T) *Pool[T] {
-	p := &Pool[T]{
-		items: &sync.Pool{
-			New: func() any {
-				return newFunc()
-			},
-		},
+func (p *Pool[T]) Get() *T  { return p.pools.Get().(*T) }
+func (p *Pool[T]) Put(t *T) { p.put(t); p.pools.Put(t) }
+
+func NewPool[T any](get func() *T, put func(*T)) *Pool[T] {
+	if get == nil {
+		get = func() *T { return new(T) }
 	}
-	return p
-}
+	if put == nil {
+		put = func(t *T) {}
+	}
 
-// Get returns an object from the pool, creating a new one if necessary.
-func (p *Pool[T]) Get() T {
-	return p.items.Get().(T)
-}
-
-// Put adds an object to the pool.
-func (p *Pool[T]) Put(x T) {
-	p.items.Put(x)
+	return &Pool[T]{
+		pools: &sync.Pool{New: func() any { return get() }},
+		put:   put,
+	}
 }

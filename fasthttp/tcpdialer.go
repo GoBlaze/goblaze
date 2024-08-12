@@ -9,31 +9,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
-// Dial dials the given TCP addr using tcp4.
-//
-// This function has the following additional features comparing to net.Dial:
-//
-//   - It reduces load on DNS resolver by caching resolved TCP addressed
-//     for DNSCacheDuration.
-//   - It dials all the resolved TCP addresses in round-robin manner until
-//     connection is established. This may be useful if certain addresses
-//     are temporarily unreachable.
-//   - It returns ErrDialTimeout if connection cannot be established during
-//     DefaultDialTimeout seconds. Use DialTimeout for customizing dial timeout.
-//
-// This dialer is intended for custom code wrapping before passing
-// to Client.Dial or HostClient.Dial.
-//
-// For instance, per-host counters and/or limits may be implemented
-// by such wrappers.
-//
-// The addr passed to the function must contain port. Example addr values:
-//
-//   - foobar.baz:443
-//   - foo.bar:80
-//   - aaa.com:8080
 func Dial(addr string) (net.Conn, error) {
 	return defaultDialer.Dial(addr)
 }
@@ -327,17 +306,22 @@ func (d *TCPDialer) tryDial(
 		default:
 			tc := AcquireTimer(timeout)
 			isTimeout := false
-			select {
-			case concurrencyCh <- struct{}{}:
-			case <-tc.C:
-				isTimeout = true
+
+			concurrencyCh <- struct{}{}
+
+			if data := zenq.Select(tc.C); data != nil {
+				switch data.(type) {
+				case time.Time:
+					isTimeout = true
+				}
+
 			}
 			ReleaseTimer(tc)
 			if isTimeout {
 				return nil, wrapDialWithUpstream(ErrDialTimeout, addr)
 			}
 		}
-		defer func() { <-concurrencyCh }()
+		func() { <-concurrencyCh }()
 	}
 
 	dialer := net.Dialer{}

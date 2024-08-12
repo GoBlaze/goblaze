@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
 // Do performs the given http request and fills the given http response.
@@ -1003,12 +1005,7 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 	}()
 
 	tc := AcquireTimer(timeout)
-	select {
-	case resp := <-ch:
-		statusCode = resp.statusCode
-		body = resp.body
-		err = resp.err
-	case <-tc.C:
+	if data := zenq.Select(tc.C); data != nil {
 		mu.Lock()
 		if responded {
 			resp := <-ch
@@ -1021,6 +1018,13 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 			body = dst
 		}
 		mu.Unlock()
+	}
+	select {
+	case resp := <-ch:
+		statusCode = resp.statusCode
+		body = resp.body
+		err = resp.err
+
 	}
 	ReleaseTimer(tc)
 
@@ -1547,15 +1551,16 @@ func (c *HostClient) acquireConn(reqTimeout time.Duration, connectionClose bool)
 		}()
 
 		c.queueForIdle(w)
-
-		select {
-		case <-w.ready:
-			return w.conn, w.err
-		case <-tc.C:
+		if data := zenq.Select(tc.C); data != nil {
 			if timeoutOverridden {
 				return nil, ErrTimeout
 			}
 			return nil, ErrNoFreeConns
+		}
+		select {
+		case <-w.ready:
+			return w.conn, w.err
+
 		}
 	}
 

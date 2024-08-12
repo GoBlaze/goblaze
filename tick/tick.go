@@ -14,6 +14,21 @@ type Ticker struct {
 	r runtimeTimer
 }
 
+//go:linkname startTimer time.startTimer
+func startTimer(*runtimeTimer)
+
+//go:linkname stopTimer time.stopTimer
+func stopTimer(*runtimeTimer) bool
+
+//go:linkname resetTimer time.resetTimer
+func resetTimer(*runtimeTimer, int64) bool
+
+//go:linkname modTimer time.modTimer
+func modTimer(*runtimeTimer, int64, int64, func(any, uintptr), any, uintptr)
+
+//go:linkname runtimeNano runtime.nanotime
+func runtimeNano() int64
+
 // NewTicker returns a new Ticker containing a channel that will send
 // the current time on the channel after each tick. The period of the
 // ticks is specified by the duration argument. The ticker will adjust
@@ -112,21 +127,6 @@ func when(d time.Duration) int64 {
 	}
 	return t
 }
-
-//go:noescape
-func startTimer(*runtimeTimer)
-
-//go:noescape
-func stopTimer(*runtimeTimer) bool
-
-//go:noescape
-func resetTimer(*runtimeTimer, int64) bool
-
-//go:noescape
-func modTimer(*runtimeTimer, int64, int64, func(any, uintptr), any, uintptr) //
-
-//go:linkname runtimeNano runtime.nanotime
-func runtimeNano() int64
 
 // The Timer type represents a single event.
 // When the Timer expires, the current time will be sent on C,

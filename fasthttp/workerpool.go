@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
 // workerPool serves incoming connections via a pool of workers
@@ -33,7 +35,7 @@ type workerPool struct {
 
 	MaxIdleWorkerDuration time.Duration
 
-	workersCount int
+	workersCount int32
 
 	lock sync.Mutex
 
@@ -43,7 +45,7 @@ type workerPool struct {
 
 type workerChan struct {
 	lastUseTime time.Time
-	ch          chan net.Conn
+	ch          *zenq.ZenQ[net.Conn]
 }
 
 func (wp *workerPool) Start() {
@@ -54,7 +56,7 @@ func (wp *workerPool) Start() {
 	stopCh := wp.stopCh
 	wp.workerChanPool.New = func() any {
 		return &workerChan{
-			ch: make(chan net.Conn, workerChanCap),
+			ch: zenq.New[net.Conn](uint32(workerChanCap)),
 		}
 	}
 	go func() {
@@ -78,20 +80,17 @@ func (wp *workerPool) Stop() {
 	close(wp.stopCh)
 	wp.stopCh = nil
 
-	// Stop all the workers waiting for incoming connections.
-	// Do not wait for busy workers - they will stop after
-	// serving the connection and noticing wp.mustStop = true.
 	wp.lock.Lock()
 	ready := wp.ready
 	for i := range ready {
-		ready[i].ch <- nil
+		// Close the ZenQ channel
+		ready[i].ch.Close()
 		ready[i] = nil
 	}
 	wp.ready = ready[:0]
 	wp.mustStop = true
 	wp.lock.Unlock()
 }
-
 func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	if wp.MaxIdleWorkerDuration <= 0 {
 		return 10 * time.Second
@@ -140,7 +139,7 @@ func (wp *workerPool) clean(scratch *[]*workerChan) {
 	// are located on non-local CPUs.
 	tmp := *scratch
 	for i := range tmp {
-		tmp[i].ch <- nil
+		tmp[i].ch.Close()
 		tmp[i] = nil
 	}
 }
@@ -150,7 +149,7 @@ func (wp *workerPool) Serve(c net.Conn) bool {
 	if ch == nil {
 		return false
 	}
-	ch.ch <- c
+	ch.ch.Write(c)
 	return true
 }
 
@@ -176,7 +175,7 @@ func (wp *workerPool) getCh() *workerChan {
 	ready := wp.ready
 	n := len(ready) - 1
 	if n < 0 {
-		if wp.workersCount < wp.MaxWorkersCount {
+		if wp.workersCount < int32(wp.MaxWorkersCount) {
 			createWorker = true
 			wp.workersCount++
 		}
@@ -200,7 +199,6 @@ func (wp *workerPool) getCh() *workerChan {
 	}
 	return ch
 }
-
 func (wp *workerPool) release(ch *workerChan) bool {
 	ch.lastUseTime = time.Now()
 	wp.lock.Lock()
@@ -214,15 +212,21 @@ func (wp *workerPool) release(ch *workerChan) bool {
 }
 
 func (wp *workerPool) workerFunc(ch *workerChan) {
-	var c net.Conn
+	for {
 
-	var err error
-	for c = range ch.ch {
-		if c == nil {
+		conn, queueOpen := ch.ch.Read()
+		if !queueOpen {
+			// If the queue is closed, break the loop
 			break
 		}
 
-		if err = wp.WorkerFunc(c); err != nil && err != errHijacked {
+		if conn == nil {
+			// If the connection is nil, continue to the next iteration
+			continue
+		}
+
+		var err error
+		if err = wp.WorkerFunc(conn); err != nil && err != errHijacked {
 			errStr := err.Error()
 			if wp.LogAllErrors || !(strings.Contains(errStr, "broken pipe") ||
 				strings.Contains(errStr, "reset by peer") ||
@@ -230,14 +234,14 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 				strings.Contains(errStr, "unexpected EOF") ||
 				strings.Contains(errStr, "i/o timeout") ||
 				errors.Is(err, ErrBadTrailer)) {
-				wp.Logger.Printf("error when serving connection %q<->%q: %v", c.LocalAddr(), c.RemoteAddr(), err)
+				wp.Logger.Printf("error when serving connection %q<->%q: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
 			}
 		}
 		if err == errHijacked {
-			wp.connState(c, StateHijacked)
+			wp.connState(conn, StateHijacked)
 		} else {
-			_ = c.Close()
-			wp.connState(c, StateClosed)
+			_ = conn.Close()
+			wp.connState(conn, StateClosed)
 		}
 
 		if !wp.release(ch) {

@@ -30,19 +30,23 @@ func validatePath(path string) string {
 	return path
 }
 
+//go:noinline
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
+//go:noinline
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+//go:noinline
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
+//go:noinline
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -62,7 +66,7 @@ func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 //
 // For more information, see: https://pkg.go.dev/cmd/compile#hdr-Compiler_Directives
 //
-
+//go:noinline
 func CopyString(s string) string {
 	c := make([]byte, len(s))
 	copy(c, StringToBytes(s))
@@ -116,6 +120,7 @@ func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	}
 }
 
+//go:noinline
 func swap[T any](a, b *T) {
 	tmp := *a
 	*a = *b
@@ -137,12 +142,11 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 //go:noinline
-//go:nosplit
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:inline
+//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -153,7 +157,6 @@ type sliceHeader struct {
 	Cap  int
 }
 
-//go:nosplit
 //go:inline
 func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 	header := *(*sliceHeader)(unsafe.Pointer(&slice))
@@ -168,7 +171,7 @@ type StringBuffer struct {
 
 func NewStringBuffer(cap int) *StringBuffer {
 	return &StringBuffer{
-		buf: make([]byte, 0, cap),
+		buf: MakeNoZeroCap(0, cap),
 	}
 }
 
@@ -192,7 +195,6 @@ func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
-//go:nosplit
 //go:inline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
@@ -289,4 +291,15 @@ func MakeNoZeroString(l int) []string {
 //go:inline
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
+}
+
+//go:noinline
+func isEqual(v1, v2 any) bool {
+	return reflect.ValueOf(v1).Pointer() == reflect.ValueOf(v2).Pointer()
+}
+
+//go:noinline
+func isNil(v any) bool {
+
+	return reflect.ValueOf(v).IsNil()
 }

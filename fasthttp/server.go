@@ -15,6 +15,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/GoBlaze/goblaze/tick"
 )
 
 var errNoCertOrKeyProvided = errors.New("cert or key has not provided")
@@ -481,11 +484,15 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 			<-concurrencyCh
 		}()
 		ctx.timeoutTimer = initTimer(ctx.timeoutTimer, timeout)
-		select {
-		case <-ch:
-		case <-ctx.timeoutTimer.C:
+
+		if data := zenq.Select(ctx.timeoutTimer.C); data != nil {
+
 			ctx.TimeoutErrorWithCode(msg, statusCode)
 		}
+
+		go func() {
+			<-ch
+		}()
 		stopTimer(ctx.timeoutTimer)
 	}
 }
@@ -605,7 +612,7 @@ type RequestCtx struct {
 
 	timeoutResponse *Response
 	timeoutCh       chan struct{}
-	timeoutTimer    *time.Timer
+	timeoutTimer    *tick.Timer
 
 	hijackHandler HijackHandler
 	formValueFunc FormValueFunc

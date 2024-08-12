@@ -12,14 +12,19 @@ import (
 	"github.com/GoBlaze/goblaze/pool"
 )
 
-var requestCtxPool = pool.NewPool[*Ctx](func() *Ctx {
+var requestCtxPool = pool.NewPool[Ctx](func() *Ctx {
 	return &Ctx{
 		response:   &fasthttp.Response{},
 		RequestCtx: &fasthttp.RequestCtx{},
-
-		searchingOnAttachedCtx: 0,
 	}
-})
+
+}, func(ctx *Ctx) {
+	// Reset fields if needed
+	ctx.RequestCtx = nil
+	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
+	// Add other fields reset here if needed
+},
+)
 
 func AcquireRequestCtx(ctx *fasthttp.RequestCtx) *Ctx {
 	actx := requestCtxPool.Get()
@@ -53,11 +58,6 @@ type Ctx struct {
 }
 
 func ReleaseRequestCtx(ctx *Ctx) {
-	ctx.RequestCtx = nil
-	// ctx.next = false
-	// ctx.skipView = false // for future
-
-	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
 
 	requestCtxPool.Put(ctx)
 }
