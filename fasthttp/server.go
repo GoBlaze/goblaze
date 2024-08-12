@@ -220,7 +220,7 @@ type Server struct {
 
 	nextProtos map[string]ServeHandler
 
-	concurrencyCh chan struct{}
+	concurrencyCh *zenq.ZenQ[struct{}]
 
 	idleConns map[net.Conn]time.Time
 	done      chan struct{}
@@ -239,7 +239,7 @@ type Server struct {
 	//
 	// Concurrency only works if you either call Serve once, or only ServeConn multiple times.
 	// It works with ListenAndServe as well.
-	Concurrency int
+	Concurrency uint32
 
 	// Per-connection buffer size for requests' reading.
 	// This also limits the maximum header size.
@@ -466,11 +466,17 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 
 	return func(ctx *RequestCtx) {
 		concurrencyCh := ctx.s.concurrencyCh
-		select {
-		case concurrencyCh <- struct{}{}:
-		default:
-			ctx.Error(msg, StatusTooManyRequests)
-			return
+
+		concurrencyCh.Write(struct{}{})
+
+		if data := zenq.Select(concurrencyCh); data != nil {
+			switch data.(type) {
+
+			default:
+				ctx.Error(msg, StatusTooManyRequests)
+				return
+			}
+
 		}
 
 		ch := ctx.timeoutCh
@@ -481,7 +487,7 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 		go func() {
 			h(ctx)
 			ch <- struct{}{}
-			<-concurrencyCh
+			concurrencyCh.Read()
 		}()
 		ctx.timeoutTimer = initTimer(ctx.timeoutTimer, timeout)
 
@@ -1813,13 +1819,13 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.done = make(chan struct{})
 	}
 	if s.concurrencyCh == nil {
-		s.concurrencyCh = make(chan struct{}, maxWorkersCount)
+		s.concurrencyCh = zenq.New[struct{}](maxWorkersCount)
 	}
 	s.mu.Unlock()
 
 	wp := &workerPool{
 		WorkerFunc:            s.serveConn,
-		MaxWorkersCount:       maxWorkersCount,
+		MaxWorkersCount:       int32(maxWorkersCount),
 		LogAllErrors:          s.LogAllErrors,
 		MaxIdleWorkerDuration: s.MaxIdleWorkerDuration,
 		Logger:                s.logger(),
@@ -2100,12 +2106,12 @@ func (s *Server) GetRejectedConnectionsCount() uint32 {
 	return atomic.LoadUint32(&s.rejectedRequestsCount)
 }
 
-func (s *Server) getConcurrency() int32 {
+func (s *Server) getConcurrency() uint32 {
 	n := s.Concurrency
 	if n <= 0 {
 		n = DefaultConcurrency
 	}
-	return int32(n)
+	return n
 }
 
 var globalConnID uint64
@@ -2796,7 +2802,7 @@ func (ctx *RequestCtx) Value(key any) any {
 
 var fakeServer = &Server{
 	// Initialize concurrencyCh for TimeoutHandler
-	concurrencyCh: make(chan struct{}, DefaultConcurrency),
+	concurrencyCh: zenq.New[struct{}](DefaultConcurrency),
 }
 
 type fakeAddrer struct {
