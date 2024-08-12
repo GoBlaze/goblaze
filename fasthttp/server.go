@@ -1818,14 +1818,12 @@ func (s *Server) Serve(ln net.Listener) error {
 	s.mu.Unlock()
 
 	wp := &workerPool{
-		funcs: &funcs{
-			WorkerFunc: s.serveConn,
-			Logger:     s.logger(),
-			connState:  s.setState,
-		},
+		WorkerFunc:            s.serveConn,
 		MaxWorkersCount:       maxWorkersCount,
-		MaxIdleWorkerDuration: s.MaxIdleWorkerDuration,
 		LogAllErrors:          s.LogAllErrors,
+		MaxIdleWorkerDuration: s.MaxIdleWorkerDuration,
+		Logger:                s.logger(),
+		connState:             s.setState,
 	}
 	wp.Start()
 
