@@ -43,7 +43,7 @@ func BenchmarkGoBlazeServer(b *testing.B) {
 		}
 
 		if string(resp.Body()) != "Hello, world!" {
-			b.Errorf("Unexpected response: %s", string(resp.Body()))
+			b.Errorf("Unexpected response: %s", resp.Body())
 		}
 
 		fasthttp.ReleaseResponse(resp)

@@ -85,17 +85,14 @@ const (
 	// 			to gWaiting to take responsibility for ready()ing this G.
 )
 
-//go:noinline
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
-//go:noinline
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
-//go:noinline
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -339,13 +336,13 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
+//go:nocheckptr
 //go:noinline
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
-	converted, err := ConvertOne[TFrom, TTo](from)
-	if err != nil {
-		panic(err)
-	}
-	return converted
+
+	// #nosec G103
+	return *(*TTo)(unsafe.Pointer(&from))
+
 }
 
 //go:noinline

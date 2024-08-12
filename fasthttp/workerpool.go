@@ -8,7 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
 )
@@ -27,9 +26,9 @@ type workerPool struct {
 	Logger     Logger
 	connState  func(net.Conn, ConnState)
 
-	stopCh chan struct{}
+	stopQueue *zenq.ZenQ[struct{}]
 
-	ready workerChanStack
+	ready []*workerChan
 
 	MaxWorkersCount int32
 
@@ -45,51 +44,13 @@ type workerPool struct {
 type workerChan struct {
 	lastUseTime time.Time
 	ch          *zenq.ZenQ[net.Conn]
-	next        *workerChan
-}
-
-type workerChanStack struct {
-	top     unsafe.Pointer
-	counter int32
-}
-
-// push adds a workerChan to the top of the stack
-func (s *workerChanStack) push(ch *workerChan) {
-	var (
-		top  unsafe.Pointer
-		item = ch
-	)
-	for {
-		top = atomic.LoadPointer(&s.top)
-		item.next = (*workerChan)(top) // Convert unsafe.Pointer to *workerChan
-		if atomic.CompareAndSwapPointer(&s.top, top, unsafe.Pointer(item)) {
-			atomic.AddInt32(&s.counter, 1)
-			return
-		}
-	}
-}
-
-func (s *workerChanStack) pop() *workerChan {
-	var top, next unsafe.Pointer
-	for {
-		top = atomic.LoadPointer(&s.top)
-		if top == nil {
-			return nil
-		}
-		next = unsafe.Pointer((*workerChan)(top).next)
-		if atomic.CompareAndSwapPointer(&s.top, top, next) {
-			atomic.AddInt32(&s.counter, -1)
-			return (*workerChan)(top)
-		}
-	}
 }
 
 func (wp *workerPool) Start() {
-	if wp.stopCh != nil {
+	if wp.stopQueue != nil {
 		return
 	}
-	wp.stopCh = make(chan struct{})
-	stopCh := wp.stopCh
+	wp.stopQueue = zenq.New[struct{}](0) // Create a ZenQ for stop signals
 	wp.workerChanPool.New = func() any {
 		return &workerChan{
 			ch: zenq.New[net.Conn](workerChanCap),
@@ -99,33 +60,32 @@ func (wp *workerPool) Start() {
 		var scratch []*workerChan
 		for {
 			wp.clean(&scratch)
-			select {
-			case <-stopCh:
+			if wp.stopQueue.IsClosed() {
 				return
-			default:
-				time.Sleep(wp.getMaxIdleWorkerDuration())
 			}
+			time.Sleep(wp.getMaxIdleWorkerDuration())
 		}
 	}()
 }
 
 func (wp *workerPool) Stop() {
-	if wp.stopCh == nil {
+	if wp.stopQueue == nil {
 		return
 	}
-	close(wp.stopCh)
-	wp.stopCh = nil
 
-	for {
-		ch := wp.ready.pop()
-		if ch == nil {
-			break
-		}
-		ch.ch.Close()
+	wp.stopQueue.Close() // Notify all waiting workers to stop
+
+	ready := wp.ready
+	for i := range ready {
+		// Close the ZenQ channel
+		ready[i].ch.Close()
+		ready[i] = nil
 	}
+	wp.ready = ready[:0]
 	wp.mustStop.Store(true)
 
 }
+
 func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	if wp.MaxIdleWorkerDuration <= 0 {
 		return 10 * time.Second
@@ -137,20 +97,26 @@ func (wp *workerPool) clean(scratch *[]*workerChan) {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
 	criticalTime := time.Now().Add(-maxIdleWorkerDuration)
 
-	for {
-		ch := wp.ready.pop()
-		if ch == nil {
-			break
-		}
+	ready := wp.ready
+	n := len(ready)
 
-		if ch.lastUseTime.Before(criticalTime) {
-			ch.ch.Close()
-			wp.workerChanPool.Put(ch)
+	l, r := 0, n-1
+	for l <= r {
+		mid := (l + r) / 2
+		if ready[mid].lastUseTime.Before(criticalTime) {
+			l = mid + 1
 		} else {
-			wp.ready.push(ch)
-			break
+			r = mid - 1
 		}
 	}
+	if r < 0 {
+
+		return
+	}
+
+	*scratch = append((*scratch)[:0], ready[:r+1]...)
+	wp.ready = ready[r+1:]
+
 	for _, ch := range *scratch {
 		ch.ch.Close()
 		wp.workerChanPool.Put(ch)
@@ -183,29 +149,30 @@ func (wp *workerPool) getCh() *workerChan {
 	var ch *workerChan
 	var createWorker atomic.Bool
 
-	ch = wp.ready.pop()
-	if ch == nil {
+	ready := wp.ready
+	n := len(ready) - 1
+	if n < 0 {
 		if atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
 			createWorker.Store(true)
 			atomic.AddInt32(&wp.workersCount, 1)
 		}
+	} else {
+		ch = ready[n]
+		ready[n] = nil
+		wp.ready = ready[:n]
 	}
 
 	if ch == nil {
+
 		vch := wp.workerChanPool.Get()
 		ch = vch.(*workerChan)
 		go func() {
-			_Ptr := GetG() // Capture the G pointer for the worker goroutine
-			wp.workerFunc(ch, _Ptr)
+			wp.workerFunc(ch)
 			wp.workerChanPool.Put(vch)
 		}()
 	}
 	return ch
 }
-
-//go:noescape
-func GetG() unsafe.Pointer
-
 func (wp *workerPool) release(ch *workerChan) bool {
 	ch.lastUseTime = time.Now()
 
@@ -213,15 +180,17 @@ func (wp *workerPool) release(ch *workerChan) bool {
 
 		return false
 	}
-	wp.ready.push(ch)
+	wp.ready = append(wp.ready, ch)
 
 	return true
 }
 
-func (wp *workerPool) workerFunc(ch *workerChan, _Ptr unsafe.Pointer) {
+func (wp *workerPool) workerFunc(ch *workerChan) {
 	for {
+
 		conn, queueOpen := ch.ch.Read()
 		if !queueOpen {
+			// If the queue is closed, break the loop
 			break
 		}
 
@@ -230,6 +199,7 @@ func (wp *workerPool) workerFunc(ch *workerChan, _Ptr unsafe.Pointer) {
 			errStr := err.Error()
 			if wp.LogAllErrors || !(strings.Contains(errStr, "broken pipe") ||
 				strings.Contains(errStr, "reset by peer") ||
+				strings.Contains(errStr, "request headers: small read buffer") ||
 				strings.Contains(errStr, "unexpected EOF") ||
 				strings.Contains(errStr, "i/o timeout") ||
 				errors.Is(err, ErrBadTrailer)) {
@@ -243,11 +213,7 @@ func (wp *workerPool) workerFunc(ch *workerChan, _Ptr unsafe.Pointer) {
 			wp.connState(conn, StateClosed)
 		}
 
-		// If no more tasks are available, park the goroutine
 		if !wp.release(ch) {
-			mCall(func(_ unsafe.Pointer) {
-				fastPark(_Ptr)
-			})
 			break
 		}
 	}

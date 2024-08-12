@@ -172,7 +172,6 @@ func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 }
 
 type StringBuffer struct {
-	_    cacheLinePadding
 	_    No // nolint:structcheck
 	buf  []byte
 	addr *StringBuffer

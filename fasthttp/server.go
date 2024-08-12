@@ -223,7 +223,7 @@ type Server struct {
 	concurrencyCh *zenq.ZenQ[struct{}]
 
 	idleConns map[net.Conn]time.Time
-	done      chan struct{}
+	done      *zenq.ZenQ[struct{}]
 
 	// Server name for sending in response headers.
 	//
@@ -1816,7 +1816,7 @@ func (s *Server) Serve(ln net.Listener) error {
 	s.mu.Lock()
 	s.ln = append(s.ln, ln)
 	if s.done == nil {
-		s.done = make(chan struct{})
+		s.done = zenq.New[struct{}](0)
 	}
 	if s.concurrencyCh == nil {
 		s.concurrencyCh = zenq.New[struct{}](maxWorkersCount)
@@ -1832,6 +1832,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		connState:             s.setState,
 	}
 	wp.Start()
+	defer wp.Stop()
 
 	// Count our waiting to accept a connection as an open connection.
 	// This way we can't get into any weird state where just after accepting
@@ -1918,7 +1919,7 @@ func (s *Server) ShutdownWithContext(ctx context.Context) (err error) {
 	}
 
 	if s.done != nil {
-		close(s.done)
+		s.done.Close()
 	}
 
 	// Closing the listener will make Serve() call Stop on the worker pool.
@@ -2760,14 +2761,14 @@ func (ctx *RequestCtx) Deadline() (deadline time.Time, ok bool) {
 //
 // Note: Because creating a new channel for every request is just too expensive, so
 // RequestCtx.s.done is only closed when the server is shutting down.
-func (ctx *RequestCtx) Done() <-chan struct{} {
+func (ctx *RequestCtx) Done() *zenq.ZenQ[struct{}] {
 	// fix use new variables to prevent panic caused by modifying the original done chan to nil.
 	done := ctx.s.done
 
 	if done == nil {
-		done = make(chan struct{}, 1)
-		done <- struct{}{}
-		return done
+		done = zenq.New[struct{}](1)
+		done.Write(struct{}{})
+		ctx.s.done = done
 	}
 	return done
 }
@@ -2782,12 +2783,22 @@ func (ctx *RequestCtx) Done() <-chan struct{} {
 // Note: Because creating a new channel for every request is just too expensive, so
 // RequestCtx.s.done is only closed when the server is shutting down.
 func (ctx *RequestCtx) Err() error {
-	select {
-	case <-ctx.Done():
+	done := ctx.Done()
+
+	// Attempt to read from the ZenQ
+	data, queueOpen := done.Read()
+
+	// Check if the queue is fully closed
+	if !queueOpen {
 		return context.Canceled
-	default:
-		return nil
 	}
+
+	// If there is no data in the queue, return nil
+	if data == (struct{}{}) {
+		return context.Canceled
+	}
+
+	return nil
 }
 
 // Value returns the value associated with this context for key, or nil
