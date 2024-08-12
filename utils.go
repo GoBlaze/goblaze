@@ -126,7 +126,6 @@ func swap[T any](a, b *T) {
 	*b = tmp
 }
 
-//go:nosplit
 //go:linkname mallocgc runtime.mallocgc
 func mallocgc(size uintptr, typ unsafe.Pointer, needzero bool) unsafe.Pointer
 
@@ -136,14 +135,14 @@ func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
 //go:linkname sysFreeOS runtime.sysFreeOS
 func sysFreeOS(v unsafe.Pointer, n uintptr)
 
-// inline is a compiler hint that tells the compiler to inline the function.
-// This can result in faster execution, but it can also increase the size of the executable.
-// The compiler is free to ignore this hint, so it should not be relied upon.
-//
 //go:noinline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
+
+// //go:noinline
+// //go:noescape
+// func MakeNoZero(l int) []byte
 
 //go:noinline
 func MakeNoZeroString(l int) []string {

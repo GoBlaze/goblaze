@@ -659,7 +659,11 @@ func CleanPath(p string) string {
 	return String(buf[:w])
 }
 
-// bufApp appends a byte to the buffer if it's not already there.
+// //go:noinline
+// //go:noescape
+// func bufApp(buf *[]byte, s string, w int, c byte)
+
+//go:noinline
 func bufApp(buf *[]byte, s string, w int, c byte) {
 
 	if *buf == nil || len(*buf) <= w {
