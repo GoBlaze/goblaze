@@ -1818,12 +1818,14 @@ func (s *Server) Serve(ln net.Listener) error {
 	s.mu.Unlock()
 
 	wp := &workerPool{
-		WorkerFunc:            s.serveConn,
+		funcs: &funcs{
+			WorkerFunc: s.serveConn,
+			Logger:     s.logger(),
+			connState:  s.setState,
+		},
 		MaxWorkersCount:       maxWorkersCount,
-		LogAllErrors:          s.LogAllErrors,
 		MaxIdleWorkerDuration: s.MaxIdleWorkerDuration,
-		Logger:                s.logger(),
-		connState:             s.setState,
+		LogAllErrors:          s.LogAllErrors,
 	}
 	wp.Start()
 
@@ -2100,12 +2102,12 @@ func (s *Server) GetRejectedConnectionsCount() uint32 {
 	return atomic.LoadUint32(&s.rejectedRequestsCount)
 }
 
-func (s *Server) getConcurrency() int {
+func (s *Server) getConcurrency() int32 {
 	n := s.Concurrency
 	if n <= 0 {
 		n = DefaultConcurrency
 	}
-	return n
+	return int32(n)
 }
 
 var globalConnID uint64

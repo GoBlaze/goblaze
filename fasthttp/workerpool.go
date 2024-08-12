@@ -6,7 +6,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
 )
@@ -16,31 +18,38 @@ import (
 // incoming connection.
 //
 // Such a scheme keeps CPU caches hot (in theory).
-type workerPool struct {
-	workerChanPool sync.Pool
-
-	Logger Logger
-
-	// Function for serving server connections.
-	// It must leave c unclosed.
+type funcs struct {
 	WorkerFunc ServeHandler
+	Logger     Logger
+	connState  func(net.Conn, ConnState)
+}
+
+type workerPool struct {
+	_              noCopy
+	workerChanPool sync.Pool
+	_              [cacheLinePadSize - unsafe.Sizeof(sync.Pool{})]byte //nolint:unused
+
+	funcs *funcs
+
+	_ [cacheLinePadSize - unsafe.Sizeof(funcs{})]byte //nolint:unused
 
 	stopCh chan struct{}
 
-	connState func(net.Conn, ConnState)
-
 	ready []*workerChan
+	_     [cacheLinePadSize - unsafe.Sizeof([]*workerChan{})]byte //nolint:unused
 
-	MaxWorkersCount int
+	MaxWorkersCount int32
+	_               [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:unused
 
 	MaxIdleWorkerDuration time.Duration
 
 	workersCount int32
-
-	lock sync.Mutex
+	_            [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:unused
 
 	LogAllErrors bool
-	mustStop     bool
+	_            [cacheLinePadSize - unsafe.Sizeof(bool(false))]byte //nolint:unused
+	mustStop     atomic.Bool
+	_            [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
 }
 
 type workerChan struct {
@@ -80,7 +89,6 @@ func (wp *workerPool) Stop() {
 	close(wp.stopCh)
 	wp.stopCh = nil
 
-	wp.lock.Lock()
 	ready := wp.ready
 	for i := range ready {
 		// Close the ZenQ channel
@@ -88,8 +96,8 @@ func (wp *workerPool) Stop() {
 		ready[i] = nil
 	}
 	wp.ready = ready[:0]
-	wp.mustStop = true
-	wp.lock.Unlock()
+	wp.mustStop.Store(true)
+
 }
 func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	if wp.MaxIdleWorkerDuration <= 0 {
@@ -100,50 +108,33 @@ func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 
 func (wp *workerPool) clean(scratch *[]*workerChan) {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
-
-	// Clean least recently used workers if they didn't serve connections
-	// for more than maxIdleWorkerDuration.
 	criticalTime := time.Now().Add(-maxIdleWorkerDuration)
 
-	wp.lock.Lock()
 	ready := wp.ready
 	n := len(ready)
 
-	// Use binary-search algorithm to find out the index of the least recently worker which can be cleaned up.
 	l, r := 0, n-1
 	for l <= r {
 		mid := (l + r) / 2
-		if criticalTime.After(wp.ready[mid].lastUseTime) {
+		if ready[mid].lastUseTime.Before(criticalTime) {
 			l = mid + 1
 		} else {
 			r = mid - 1
 		}
 	}
-	i := r
-	if i == -1 {
-		wp.lock.Unlock()
+	if r < 0 {
+
 		return
 	}
 
-	*scratch = append((*scratch)[:0], ready[:i+1]...)
-	m := copy(ready, ready[i+1:])
-	for i = m; i < n; i++ {
-		ready[i] = nil
-	}
-	wp.ready = ready[:m]
-	wp.lock.Unlock()
+	*scratch = append((*scratch)[:0], ready[:r+1]...)
+	wp.ready = ready[r+1:]
 
-	// Notify obsolete workers to stop.
-	// This notification must be outside the wp.lock, since ch.ch
-	// may be blocking and may consume a lot of time if many workers
-	// are located on non-local CPUs.
-	tmp := *scratch
-	for i := range tmp {
-		tmp[i].ch.Close()
-		tmp[i] = nil
+	for _, ch := range *scratch {
+		ch.ch.Close()
+		wp.workerChanPool.Put(ch)
 	}
 }
-
 func (wp *workerPool) Serve(c net.Conn) bool {
 	ch := wp.getCh()
 	if ch == nil {
@@ -169,27 +160,23 @@ var workerChanCap = func() int {
 
 func (wp *workerPool) getCh() *workerChan {
 	var ch *workerChan
-	createWorker := false
+	var createWorker atomic.Bool
 
-	wp.lock.Lock()
 	ready := wp.ready
 	n := len(ready) - 1
 	if n < 0 {
-		if wp.workersCount < int32(wp.MaxWorkersCount) {
-			createWorker = true
-			wp.workersCount++
+		if atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
+			createWorker.Store(true)
+			atomic.AddInt32(&wp.workersCount, 1)
 		}
 	} else {
 		ch = ready[n]
 		ready[n] = nil
 		wp.ready = ready[:n]
 	}
-	wp.lock.Unlock()
 
 	if ch == nil {
-		if !createWorker {
-			return nil
-		}
+
 		vch := wp.workerChanPool.Get()
 		ch = vch.(*workerChan)
 		go func() {
@@ -201,13 +188,13 @@ func (wp *workerPool) getCh() *workerChan {
 }
 func (wp *workerPool) release(ch *workerChan) bool {
 	ch.lastUseTime = time.Now()
-	wp.lock.Lock()
-	if wp.mustStop {
-		wp.lock.Unlock()
+
+	if wp.mustStop.Load() {
+
 		return false
 	}
 	wp.ready = append(wp.ready, ch)
-	wp.lock.Unlock()
+
 	return true
 }
 
@@ -220,13 +207,8 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 			break
 		}
 
-		if conn == nil {
-			// If the connection is nil, continue to the next iteration
-			continue
-		}
-
 		var err error
-		if err = wp.WorkerFunc(conn); err != nil && err != errHijacked {
+		if err = wp.funcs.WorkerFunc(conn); err != nil && err != errHijacked {
 			errStr := err.Error()
 			if wp.LogAllErrors || !(strings.Contains(errStr, "broken pipe") ||
 				strings.Contains(errStr, "reset by peer") ||
@@ -234,14 +216,14 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 				strings.Contains(errStr, "unexpected EOF") ||
 				strings.Contains(errStr, "i/o timeout") ||
 				errors.Is(err, ErrBadTrailer)) {
-				wp.Logger.Printf("error when serving connection %q<->%q: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
+				wp.funcs.Logger.Printf("error when serving connection %q<->%q: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
 			}
 		}
 		if err == errHijacked {
-			wp.connState(conn, StateHijacked)
+			wp.funcs.connState(conn, StateHijacked)
 		} else {
 			_ = conn.Close()
-			wp.connState(conn, StateClosed)
+			wp.funcs.connState(conn, StateClosed)
 		}
 
 		if !wp.release(ch) {
@@ -249,7 +231,5 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 		}
 	}
 
-	wp.lock.Lock()
-	wp.workersCount--
-	wp.lock.Unlock()
+	atomic.AddInt32(&wp.workersCount, -1)
 }

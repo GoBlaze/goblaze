@@ -35,7 +35,8 @@ type Router struct {
 }
 
 type node struct {
-	_        No // nolint:structcheck,unused
+	_        cacheLinePadding //nolint:unused
+	_        No               // nolint:structcheck,unused
 	children []*node
 
 	path string
@@ -347,7 +348,7 @@ func (n *node) addRoute(path string, handle Handler) {
 
 				if c != ':' && c != '*' {
 
-					n.indices += string(c) // Convert byte to string directly
+					n.indices += string(c)
 					child := &node{
 						maxParams: numParams,
 					}

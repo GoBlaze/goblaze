@@ -2,7 +2,7 @@
 #include "go_asm.h"
 
 
-TEXT ·MakeNoZeroAsm(SB), NOSPLIT, $0-16 // idc its terrible
+TEXT ·MakeNoZero1(SB), NOSPLIT, $0-16 // idc its terrible
     MOVQ    l+0(FP), DI   
     MOVQ    $0, AX      
     MOVQ    $0, BX      

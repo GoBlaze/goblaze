@@ -1277,8 +1277,8 @@ func (h *fsHandler) createDirIndex(ctx *RequestCtx, dirPath string, mustCompress
 	if len(basePathEscaped) > 1 {
 		var parentURI URI
 		base.CopyTo(&parentURI)
-		parentURI.Update(string(base.Path()) + "/..")
-		parentPathEscaped := html.EscapeString(string(parentURI.Path()))
+		parentURI.Update(String(base.Path()) + "/..")
+		parentPathEscaped := html.EscapeString(String(parentURI.Path()))
 		_, _ = fmt.Fprintf(w, `<li><a href="%s" class="dir">..</a></li>`, parentPathEscaped)
 	}
 
@@ -1311,12 +1311,12 @@ nestedContinue:
 
 	var u URI
 	base.CopyTo(&u)
-	u.Update(string(u.Path()) + "/")
+	u.Update(String(u.Path()) + "/")
 
 	sort.Strings(filenames)
 	for _, name := range filenames {
 		u.Update(name)
-		pathEscaped := html.EscapeString(string(u.Path()))
+		pathEscaped := html.EscapeString(String(u.Path()))
 		fi := fm[name]
 		auxStr := "dir"
 		className := "dir"
@@ -1616,7 +1616,7 @@ func (h *fsHandler) openFSFile(filePath string, mustCompress bool, fileEncoding 
 
 func (h *fsHandler) newFSFile(f fs.File, fileInfo fs.FileInfo, compressed bool, filePath, fileEncoding string) (*fsFile, error) {
 	n := fileInfo.Size()
-	contentLength := int(n)
+	contentLength := MustConvertOne[int64, int](n)
 	if n != MustConvertOne[int, int64](contentLength) {
 		_ = f.Close()
 		return nil, fmt.Errorf("too big file: %d bytes", n)

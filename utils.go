@@ -8,6 +8,7 @@ import (
 )
 
 type ErrorSizeUnmatch struct {
+	_          cacheLinePadding
 	fromLength int
 	fromSize   int64
 
@@ -140,7 +141,6 @@ func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-// //go:noinline
 // //go:noescape
 // func MakeNoZero(l int) []byte
 
@@ -165,7 +165,6 @@ type sliceHeader struct {
 	Cap  int
 }
 
-//go:nosplit
 //go:inline
 func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 	header := *(*sliceHeader)(unsafe.Pointer(&slice))
@@ -173,6 +172,7 @@ func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 }
 
 type StringBuffer struct {
+	_    cacheLinePadding
 	_    No // nolint:structcheck
 	buf  []byte
 	addr *StringBuffer
