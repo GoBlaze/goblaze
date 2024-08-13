@@ -219,8 +219,8 @@ func WriteGunzip(w io.Writer, p []byte) (int, error) {
 	}
 	n, err := copyZeroAlloc(w, zr)
 	releaseGzipReader(zr)
-	nn := MustConvertOne[int64, int](n)
-	if MustConvertOne[int, int64](nn) != n {
+	nn := int(n)
+	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data gunzipped: %d", n)
 	}
 	return nn, err
@@ -328,8 +328,8 @@ func WriteInflate(w io.Writer, p []byte) (int, error) {
 	}
 	n, err := copyZeroAlloc(w, zr)
 	releaseFlateReader(zr)
-	nn := MustConvertOne[int64, int](n)
-	if MustConvertOne[int, int64](nn) != n {
+	nn := int(n)
+	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data inflated: %d", n)
 	}
 	return nn, err

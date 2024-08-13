@@ -843,7 +843,7 @@ func (u *URI) appendSchemeHost(dst []byte) []byte {
 // WriteTo implements io.WriterTo interface.
 func (u *URI) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(u.FullURI())
-	return MustConvertOne[int, int64](n), err
+	return int64(n), err
 }
 
 // String returns full uri.

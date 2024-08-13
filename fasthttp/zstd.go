@@ -162,8 +162,8 @@ func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 	}
 	n, err := copyZeroAlloc(w, zr)
 	releaseZstdReader(zr)
-	nn := MustConvertOne[int64, int](n)
-	if MustConvertOne[int, int64](nn) != n {
+	nn := int(n)
+	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data unzstd: %d", n)
 	}
 	return nn, err

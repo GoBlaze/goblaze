@@ -31,23 +31,19 @@ func validatePath(path string) string {
 	return path
 }
 
-//go:noinline
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-//go:noinline
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
-//go:noinline
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
-//go:noinline
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -74,7 +70,6 @@ func CopyString(s string) string {
 	return String(c)
 }
 
-//go:noinline
 func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	var (
 		zeroValFrom TFrom
@@ -136,7 +131,6 @@ func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
 //go:linkname sysFreeOS runtime.sysFreeOS
 func sysFreeOS(v unsafe.Pointer, n uintptr)
 
-//go:noinline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
@@ -144,17 +138,13 @@ func MakeNoZero(l int) []byte {
 // //go:noescape
 // func MakeNoZero(l int) []byte
 
-//go:noinline
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:noinline
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
-
-//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -165,7 +155,6 @@ type sliceHeader struct {
 	Cap  int
 }
 
-//go:inline
 func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 	header := *(*sliceHeader)(unsafe.Pointer(&slice))
 	return header.Data
@@ -203,7 +192,6 @@ func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
-//go:noinline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
 	copy(buf, b.buf)

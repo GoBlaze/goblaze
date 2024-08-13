@@ -208,8 +208,8 @@ func (resp *Response) SendFile(path string) error {
 		return err
 	}
 	size64 := fileInfo.Size()
-	size := MustConvertOne[int64, int](size64)
-	if MustConvertOne[int, int64](size) != size64 {
+	size := int(size64)
+	if int64(size) != size64 {
 		size = -1
 	}
 
@@ -1098,9 +1098,9 @@ func readMultipartForm(r io.Reader, boundary string, size, maxInMemoryFileSize i
 	if size <= 0 {
 		return nil, fmt.Errorf("form size must be greater than 0. Given %d", size)
 	}
-	lr := io.LimitReader(r, MustConvertOne[int, int64](size))
+	lr := io.LimitReader(r, int64(size))
 	mr := multipart.NewReader(lr, boundary)
-	f, err := mr.ReadForm(MustConvertOne[int, int64](maxInMemoryFileSize))
+	f, err := mr.ReadForm(int64(maxInMemoryFileSize))
 	if err != nil {
 		return nil, fmt.Errorf("cannot read multipart/form-data body: %w", err)
 	}
@@ -1529,7 +1529,7 @@ type statsWriter struct {
 
 func (w *statsWriter) Write(p []byte) (int, error) {
 	n, err := w.w.Write(p)
-	w.bytesWritten += MustConvertOne[int, int64](n)
+	w.bytesWritten += int64(n)
 	return n, err
 }
 
@@ -1994,8 +1994,8 @@ func (req *Request) writeBodyStream(w *bufio.Writer) error {
 	if contentLength < 0 {
 		lrSize := limitedReaderSize(req.bodyStream)
 		if lrSize >= 0 {
-			contentLength = MustConvertOne[int64, int](lrSize)
-			if MustConvertOne[int, int64](contentLength) != lrSize {
+			contentLength = int(lrSize)
+			if int64(contentLength) != lrSize {
 				contentLength = -1
 			}
 			if contentLength >= 0 {
@@ -2005,7 +2005,7 @@ func (req *Request) writeBodyStream(w *bufio.Writer) error {
 	}
 	if contentLength >= 0 {
 		if err = req.Header.Write(w); err == nil {
-			err = writeBodyFixedSize(w, req.bodyStream, MustConvertOne[int, int64](contentLength))
+			err = writeBodyFixedSize(w, req.bodyStream, int64(contentLength))
 		}
 	} else {
 		req.Header.SetContentLength(-1)
@@ -2042,8 +2042,8 @@ func (resp *Response) writeBodyStream(w *bufio.Writer, sendBody bool) (err error
 	if contentLength < 0 {
 		lrSize := limitedReaderSize(resp.bodyStream)
 		if lrSize >= 0 {
-			contentLength = MustConvertOne[int64, int](lrSize)
-			if MustConvertOne[int, int64](contentLength) != lrSize {
+			contentLength = int(lrSize)
+			if int64(contentLength) != lrSize {
 				contentLength = -1
 			}
 			if contentLength >= 0 {
@@ -2057,7 +2057,7 @@ func (resp *Response) writeBodyStream(w *bufio.Writer, sendBody bool) (err error
 				err = w.Flush()
 			}
 			if err == nil && sendBody {
-				err = writeBodyFixedSize(w, resp.bodyStream, MustConvertOne[int, int64](contentLength))
+				err = writeBodyFixedSize(w, resp.bodyStream, int64(contentLength))
 			}
 		}
 	} else {

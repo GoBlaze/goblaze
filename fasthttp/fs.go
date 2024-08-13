@@ -644,12 +644,12 @@ func (r *bigFileReader) UpdateByteRange(startPos, endPos int) error {
 	if !ok {
 		return errors.New("must implement io.Seeker")
 	}
-	if _, err := seeker.Seek(MustConvertOne[int, int64](startPos), io.SeekStart); err != nil {
+	if _, err := seeker.Seek(int64(startPos), io.SeekStart); err != nil {
 		return err
 	}
 	r.r = &r.lr
 	r.lr.R = r.f
-	r.lr.N = MustConvertOne[int, int64](endPos - startPos + 1)
+	r.lr.N = int64(endPos - startPos + 1)
 	return nil
 }
 
@@ -729,7 +729,7 @@ func (r *fsSmallFileReader) Read(p []byte) (int, error) {
 		if !ok {
 			return 0, errors.New("must implement io.ReaderAt")
 		}
-		n, err := ra.ReadAt(p, MustConvertOne[int, int64](r.startPos))
+		n, err := ra.ReadAt(p, int64(r.startPos))
 		r.startPos += n
 		return n, err
 	}
@@ -746,7 +746,7 @@ func (r *fsSmallFileReader) WriteTo(w io.Writer) (int64, error) {
 	var err error
 	if ff.f == nil {
 		n, err = w.Write(ff.dirIndex[r.startPos:r.endPos])
-		return MustConvertOne[int, int64](n), err
+		return int64(n), err
 	}
 
 	if rf, ok := w.(io.ReaderFrom); ok {
@@ -768,7 +768,7 @@ func (r *fsSmallFileReader) WriteTo(w io.Writer) (int64, error) {
 		if !ok {
 			return 0, errors.New("must implement io.ReaderAt")
 		}
-		n, err = ra.ReadAt(buf, MustConvertOne[int, int64](curPos))
+		n, err = ra.ReadAt(buf, int64(curPos))
 		nw, errw := w.Write(buf[:n])
 		curPos += nw
 		if errw == nil && nw != n {
@@ -783,7 +783,7 @@ func (r *fsSmallFileReader) WriteTo(w io.Writer) (int64, error) {
 	if err == io.EOF {
 		err = nil
 	}
-	return MustConvertOne[int, int64](curPos - r.startPos), err
+	return int64(curPos - r.startPos), err
 }
 
 type cacheManager interface {
@@ -1616,8 +1616,8 @@ func (h *fsHandler) openFSFile(filePath string, mustCompress bool, fileEncoding 
 
 func (h *fsHandler) newFSFile(f fs.File, fileInfo fs.FileInfo, compressed bool, filePath, fileEncoding string) (*fsFile, error) {
 	n := fileInfo.Size()
-	contentLength := MustConvertOne[int64, int](n)
-	if n != MustConvertOne[int, int64](contentLength) {
+	contentLength := int(n)
+	if n != int64(contentLength) {
 		_ = f.Close()
 		return nil, fmt.Errorf("too big file: %d bytes", n)
 	}

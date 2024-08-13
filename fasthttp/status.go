@@ -166,7 +166,7 @@ func StatusMessage(statusCode int) string {
 func formatStatusLine(dst, protocol []byte, statusCode int, statusText []byte) []byte {
 	dst = append(dst, protocol...)
 	dst = append(dst, ' ')
-	dst = strconv.AppendInt(dst, MustConvertOne[int, int64](statusCode), 10)
+	dst = strconv.AppendInt(dst, int64(statusCode), 10)
 	dst = append(dst, ' ')
 	if len(statusText) == 0 {
 		dst = append(dst, s2b(StatusMessage(statusCode))...)

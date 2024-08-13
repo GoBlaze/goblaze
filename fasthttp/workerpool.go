@@ -19,7 +19,8 @@ import (
 // Such a scheme keeps CPU caches hot (in theory).
 
 type workerPool struct {
-	_              noCopy
+	_ noCopy
+
 	workerChanPool sync.Pool
 
 	WorkerFunc ServeHandler
@@ -28,7 +29,7 @@ type workerPool struct {
 
 	stopQueue *zenq.ZenQ[struct{}]
 
-	ready []*workerChan
+	ready workerChanStack
 
 	MaxWorkersCount int32
 
@@ -42,24 +43,52 @@ type workerPool struct {
 }
 
 type workerChan struct {
-	lastUseTime time.Time
+	lastUseTime int64
 	ch          *zenq.ZenQ[net.Conn]
+	next        *workerChan
+}
+
+type workerChanStack struct {
+	head, tail *workerChan
+}
+
+// push adds a workerChan to the top of the stack
+func (s *workerChanStack) push(ch *workerChan) {
+	ch.next = s.head
+	s.head = ch
+	if s.tail == nil {
+		s.tail = ch
+	}
+}
+
+func (s *workerChanStack) pop() *workerChan {
+	if s.head == nil {
+		return nil
+	}
+
+	ch := s.head
+	s.head = ch.next
+	if s.head == nil {
+		s.tail = nil
+	}
+	return ch
 }
 
 func (wp *workerPool) Start() {
 	if wp.stopQueue != nil {
 		return
 	}
+
 	wp.stopQueue = zenq.New[struct{}](0) // Create a ZenQ for stop signals
 	wp.workerChanPool.New = func() any {
 		return &workerChan{
 			ch: zenq.New[net.Conn](workerChanCap),
 		}
 	}
+
 	go func() {
-		var scratch []*workerChan
 		for {
-			wp.clean(&scratch)
+			wp.clean()
 			if wp.stopQueue.IsClosed() {
 				return
 			}
@@ -75,15 +104,15 @@ func (wp *workerPool) Stop() {
 
 	wp.stopQueue.Close() // Notify all waiting workers to stop
 
-	ready := wp.ready
-	for i := range ready {
-		// Close the ZenQ channel
-		ready[i].ch.Close()
-		ready[i] = nil
+	for {
+		ch := wp.ready.pop()
+		if ch == nil {
+			break
+		}
+		ch.ch.Close()
 	}
-	wp.ready = ready[:0]
-	wp.mustStop.Store(true)
 
+	wp.mustStop.Store(true)
 }
 
 func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
@@ -93,33 +122,26 @@ func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	return wp.MaxIdleWorkerDuration
 }
 
-func (wp *workerPool) clean(scratch *[]*workerChan) {
+func (wp *workerPool) clean() {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
-	criticalTime := time.Now().Add(-maxIdleWorkerDuration)
+	criticalTime := time.Now().Add(-maxIdleWorkerDuration).UnixNano()
 
-	ready := wp.ready
-	n := len(ready)
+	current := wp.ready.head
+	prev := wp.ready.head
 
-	l, r := 0, n-1
-	for l <= r {
-		mid := (l + r) / 2
-		if ready[mid].lastUseTime.Before(criticalTime) {
-			l = mid + 1
+	for current != nil {
+		if current.lastUseTime < criticalTime {
+			current.ch.Close()
+			wp.workerChanPool.Put(current)
+			prev.next = current.next
+			if current == wp.ready.tail {
+				wp.ready.tail = prev
+			}
+			current = prev.next
 		} else {
-			r = mid - 1
+			prev = current
+			current = current.next
 		}
-	}
-	if r < 0 {
-
-		return
-	}
-
-	*scratch = append((*scratch)[:0], ready[:r+1]...)
-	wp.ready = ready[r+1:]
-
-	for _, ch := range *scratch {
-		ch.ch.Close()
-		wp.workerChanPool.Put(ch)
 	}
 }
 func (wp *workerPool) Serve(c net.Conn) bool {
@@ -149,17 +171,12 @@ func (wp *workerPool) getCh() *workerChan {
 	var ch *workerChan
 	var createWorker atomic.Bool
 
-	ready := wp.ready
-	n := len(ready) - 1
-	if n < 0 {
+	ch = wp.ready.pop()
+	if ch == nil {
 		if atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
 			createWorker.Store(true)
 			atomic.AddInt32(&wp.workersCount, 1)
 		}
-	} else {
-		ch = ready[n]
-		ready[n] = nil
-		wp.ready = ready[:n]
 	}
 
 	if ch == nil {
@@ -174,20 +191,20 @@ func (wp *workerPool) getCh() *workerChan {
 	return ch
 }
 func (wp *workerPool) release(ch *workerChan) bool {
-	ch.lastUseTime = time.Now()
+	ch.lastUseTime = time.Now().UnixNano()
 
 	if wp.mustStop.Load() {
 
 		return false
 	}
-	wp.ready = append(wp.ready, ch)
+	wp.ready.push(ch)
 
 	return true
 }
 
 func (wp *workerPool) workerFunc(ch *workerChan) {
-	for {
 
+	for {
 		conn, queueOpen := ch.ch.Read()
 		if !queueOpen {
 			// If the queue is closed, break the loop

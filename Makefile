@@ -29,7 +29,7 @@ clean:
 	rm -f $(BINARY) $(C_OBJ) $(C_LIB)
 
 bench:
-	@go test -benchmem -cpuprofile cpu.prof -memprofile mem.prof -benchtime=5s -timeout 20s -bench . -benchmem ./benchmarks -count 3
+	@go test -benchmem  -cpuprofile cpu.prof -memprofile mem.prof -benchtime=5s -timeout 20s -bench . -benchmem ./benchmarks -count 3
 
 memory:
 	@go tool pprof -http=:8080 mem.prof # install graphviz too see graphs in web

@@ -470,7 +470,7 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 		concurrencyCh.Write(struct{}{})
 
 		if data := zenq.Select(concurrencyCh); data != nil {
-			switch data.(type) {
+			switch data {
 
 			default:
 				ctx.Error(msg, StatusTooManyRequests)
@@ -1161,7 +1161,7 @@ var (
 		if err == nil && mf.Value != nil {
 			vv := mf.Value[key]
 			if len(vv) > 0 {
-				return StringToBytes(vv[0])
+				return []byte(vv[0])
 			}
 		}
 		return nil
@@ -1180,7 +1180,7 @@ var (
 		if err == nil && mf.Value != nil {
 			vv := mf.Value[key]
 			if len(vv) > 0 {
-				return StringToBytes(vv[0])
+				return []byte(vv[0])
 			}
 		}
 		v = ctx.QueryArgs().Peek(key)
@@ -1819,20 +1819,19 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.done = zenq.New[struct{}](0)
 	}
 	if s.concurrencyCh == nil {
-		s.concurrencyCh = zenq.New[struct{}](maxWorkersCount)
+		s.concurrencyCh = zenq.New[struct{}](uint32(maxWorkersCount))
 	}
 	s.mu.Unlock()
 
 	wp := &workerPool{
 		WorkerFunc:            s.serveConn,
-		MaxWorkersCount:       int32(maxWorkersCount),
+		MaxWorkersCount:       maxWorkersCount,
 		LogAllErrors:          s.LogAllErrors,
 		MaxIdleWorkerDuration: s.MaxIdleWorkerDuration,
 		Logger:                s.logger(),
 		connState:             s.setState,
 	}
 	wp.Start()
-	defer wp.Stop()
 
 	// Count our waiting to accept a connection as an open connection.
 	// This way we can't get into any weird state where just after accepting
@@ -2107,12 +2106,12 @@ func (s *Server) GetRejectedConnectionsCount() uint32 {
 	return atomic.LoadUint32(&s.rejectedRequestsCount)
 }
 
-func (s *Server) getConcurrency() uint32 {
+func (s *Server) getConcurrency() int32 {
 	n := s.Concurrency
 	if n <= 0 {
 		n = DefaultConcurrency
 	}
-	return n
+	return int32(n)
 }
 
 var globalConnID uint64

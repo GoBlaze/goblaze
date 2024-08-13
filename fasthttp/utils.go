@@ -30,7 +30,6 @@ func validatePath(path string) string {
 	return path
 }
 
-//go:noinline
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
@@ -127,14 +126,13 @@ func dropG()
 //
 // For more information, see: https://pkg.go.dev/cmd/compile#hdr-Compiler_Directives
 //
-//go:noinline
+
 func CopyString(s string) string {
 	c := make([]byte, len(s))
 	copy(c, StringToBytes(s))
 	return String(c)
 }
 
-//go:noinline
 func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	var (
 		zeroValFrom TFrom
@@ -203,12 +201,10 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 
-//go:noinline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -219,7 +215,6 @@ type sliceHeader struct {
 	Cap  int
 }
 
-//go:inline
 func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 	header := *(*sliceHeader)(unsafe.Pointer(&slice))
 	return header.Data
@@ -257,7 +252,6 @@ func (b *StringBuffer) Reset() {
 	b.buf = b.buf[:0] // reuse the underlying storage
 }
 
-//go:inline
 func (b *StringBuffer) grow(n int) {
 	buf := MakeNoZero(2*cap(b.buf) + n)[:len(b.buf)]
 	copy(buf, b.buf)
@@ -307,7 +301,6 @@ func (b *StringBuffer) WriteString(s string) (int, error) {
 //go:linkname noescape runtime.noescape
 func noescape(p unsafe.Pointer) unsafe.Pointer
 
-//go:nosplit
 func (b *StringBuffer) copyCheck() {
 	if b.addr == nil {
 
@@ -317,7 +310,6 @@ func (b *StringBuffer) copyCheck() {
 	}
 }
 
-//go:noinline
 func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	var (
 		zeroValFrom TFrom
@@ -336,8 +328,6 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
-//go:nocheckptr
-//go:noinline
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 	// #nosec G103
@@ -345,12 +335,10 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 }
 
-//go:noinline
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:inline
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }

@@ -2401,7 +2401,7 @@ func (h *ResponseHeader) Write(w *bufio.Writer) error {
 // WriteTo implements io.WriterTo interface.
 func (h *ResponseHeader) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(h.Header())
-	return MustConvertOne[int, int64](n), err
+	return int64(n), err
 }
 
 // Header returns response header representation.
@@ -2533,7 +2533,7 @@ func (h *RequestHeader) Write(w *bufio.Writer) error {
 // WriteTo implements io.WriterTo interface.
 func (h *RequestHeader) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(h.Header())
-	return MustConvertOne[int, int64](n), err
+	return int64(n), err
 }
 
 // Header returns request header representation.

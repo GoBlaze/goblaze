@@ -350,7 +350,7 @@ func (c *Cookie) String() string {
 // WriteTo implements io.WriterTo interface.
 func (c *Cookie) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(c.Cookie())
-	return MustConvertOne[int, int64](n), err
+	return int64(n), err
 }
 
 var errNoCookies = errors.New("no cookies found")

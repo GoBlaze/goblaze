@@ -19,10 +19,10 @@ var requestCtxPool = pool.NewPool[Ctx](func() *Ctx {
 	}
 
 }, func(ctx *Ctx) {
-	// Reset fields if needed
+
 	ctx.RequestCtx = nil
 	atomic.StoreInt32(&ctx.searchingOnAttachedCtx, 0)
-	// Add other fields reset here if needed
+
 },
 )
 
