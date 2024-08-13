@@ -8,48 +8,58 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
-// workerPool serves incoming connections via a pool of workers
-// in FILO order, i.e. the most recently stopped worker will serve the next
-// incoming connection.
-//
-// Such a scheme keeps CPU caches hot (in theory).
-
 type workerPool struct {
-	_ noCopy
-
-	workerChanPool sync.Pool
-
-	WorkerFunc ServeHandler
-	Logger     Logger
-	connState  func(net.Conn, ConnState)
-
-	stopQueue *zenq.ZenQ[struct{}]
+	_ cacheLinePadding //nolint:unused
 
 	ready workerChanStack
+	_     [cacheLinePadSize - unsafe.Sizeof(workerChanStack{})]byte //nolint:unused
 
-	MaxWorkersCount int32
+	workerChanPool sync.Pool
+	_              [cacheLinePadSize - unsafe.Sizeof(sync.Pool{})]byte //nolint:unused
+
+	Logger     Logger
+	_          [cacheLinePadSize - unsafe.Sizeof(Logger(nil))]byte //nolint:unused
+	WorkerFunc ServeHandler
+	_          [cacheLinePadSize - unsafe.Sizeof(ServeHandler(nil))]byte //nolint:structcheck,unused
+	connState  func(net.Conn, ConnState)
+	_          [cacheLinePadSize - 8]byte //nolint:unused
 
 	MaxIdleWorkerDuration time.Duration
+	_                     [cacheLinePadSize - unsafe.Sizeof(time.Duration(0))]byte //nolint:unused
+	MaxWorkersCount       int32
+	_                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:structcheck,unused
+	workersCount          int32
+	_                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:unused
 
-	workersCount int32
+	stopSignal atomic.Bool                                           // Use atomic.Bool for stop signal
+	_          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
+	mustStop   atomic.Bool
+	_          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
 
 	LogAllErrors bool
+	_            [cacheLinePadSize - 1]byte //nolint:unused
 
-	mustStop atomic.Bool
 }
 
 type workerChan struct {
-	lastUseTime int64
+	_    cacheLinePadding
+	next *workerChan
+	_    [cacheLinePadSize - 8]byte
+
 	ch          *zenq.ZenQ[net.Conn]
-	next        *workerChan
+	_           [cacheLinePadSize - 8]byte
+	lastUseTime int64
+	_           [cacheLinePadSize - unsafe.Sizeof(int64(0))]byte
 }
 
 type workerChanStack struct {
 	head, tail *workerChan
+	_          [cacheLinePadSize - (2 * unsafe.Sizeof(uintptr(0)))]byte //nolint:unused
 }
 
 // push adds a workerChan to the top of the stack
@@ -62,24 +72,21 @@ func (s *workerChanStack) push(ch *workerChan) {
 }
 
 func (s *workerChanStack) pop() *workerChan {
-	if s.head == nil {
+	head := s.head
+	if head == nil {
 		return nil
 	}
-
-	ch := s.head
-	s.head = ch.next
+	s.head = head.next
 	if s.head == nil {
 		s.tail = nil
 	}
-	return ch
+	return head
 }
-
 func (wp *workerPool) Start() {
-	if wp.stopQueue != nil {
+	if wp.stopSignal.Load() {
 		return
 	}
 
-	wp.stopQueue = zenq.New[struct{}](0) // Create a ZenQ for stop signals
 	wp.workerChanPool.New = func() any {
 		return &workerChan{
 			ch: zenq.New[net.Conn](workerChanCap),
@@ -89,7 +96,7 @@ func (wp *workerPool) Start() {
 	go func() {
 		for {
 			wp.clean()
-			if wp.stopQueue.IsClosed() {
+			if wp.stopSignal.Load() {
 				return
 			}
 			time.Sleep(wp.getMaxIdleWorkerDuration())
@@ -98,12 +105,12 @@ func (wp *workerPool) Start() {
 }
 
 func (wp *workerPool) Stop() {
-	if wp.stopQueue == nil {
+	if wp.mustStop.Load() {
 		return
 	}
+	wp.stopSignal.Store(true)
 
-	wp.stopQueue.Close() // Notify all waiting workers to stop
-
+	// Close all worker channels in the ready stack
 	for {
 		ch := wp.ready.pop()
 		if ch == nil {
@@ -114,7 +121,6 @@ func (wp *workerPool) Stop() {
 
 	wp.mustStop.Store(true)
 }
-
 func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	if wp.MaxIdleWorkerDuration <= 0 {
 		return 10 * time.Second
@@ -127,43 +133,42 @@ func (wp *workerPool) clean() {
 	criticalTime := time.Now().Add(-maxIdleWorkerDuration).UnixNano()
 
 	current := wp.ready.head
-	prev := wp.ready.head
+	var prev *workerChan
 
 	for current != nil {
 		if current.lastUseTime < criticalTime {
 			current.ch.Close()
 			wp.workerChanPool.Put(current)
-			prev.next = current.next
+			if prev == nil {
+				wp.ready.head = current.next
+			} else {
+				prev.next = current.next
+			}
 			if current == wp.ready.tail {
 				wp.ready.tail = prev
 			}
-			current = prev.next
+			current = current.next
 		} else {
 			prev = current
 			current = current.next
 		}
 	}
 }
+
 func (wp *workerPool) Serve(c net.Conn) bool {
 	ch := wp.getCh()
 	if ch == nil {
 		return false
 	}
 	ch.ch.Write(c)
+
 	return true
 }
 
 var workerChanCap = func() uint32 {
-	// Use blocking workerChan if GOMAXPROCS=1.
-	// This immediately switches Serve to WorkerFunc, which results
-	// in higher performance (under go1.5 at least).
 	if runtime.GOMAXPROCS(0) == 1 {
 		return 0
 	}
-
-	// Use non-blocking workerChan if GOMAXPROCS>1,
-	// since otherwise the Serve caller (Acceptor) may lag accepting
-	// new connections if WorkerFunc is CPU-bound.
 	return 1
 }()
 
@@ -180,7 +185,6 @@ func (wp *workerPool) getCh() *workerChan {
 	}
 
 	if ch == nil {
-
 		vch := wp.workerChanPool.Get()
 		ch = vch.(*workerChan)
 		go func() {
@@ -190,25 +194,23 @@ func (wp *workerPool) getCh() *workerChan {
 	}
 	return ch
 }
+
 func (wp *workerPool) release(ch *workerChan) bool {
 	ch.lastUseTime = time.Now().UnixNano()
-
 	if wp.mustStop.Load() {
-
 		return false
 	}
 	wp.ready.push(ch)
-
 	return true
 }
 
 func (wp *workerPool) workerFunc(ch *workerChan) {
-
 	for {
-		conn, queueOpen := ch.ch.Read()
-		if !queueOpen {
-			// If the queue is closed, break the loop
-			break
+
+		conn, _ := ch.ch.Read()
+
+		if conn == nil {
+			panic("workerFunc: data == nil")
 		}
 
 		var err error
@@ -236,4 +238,5 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 	}
 
 	atomic.AddInt32(&wp.workersCount, -1)
+
 }

@@ -466,39 +466,27 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 
 	return func(ctx *RequestCtx) {
 		concurrencyCh := ctx.s.concurrencyCh
-
 		concurrencyCh.Write(struct{}{})
 
-		if data := zenq.Select(concurrencyCh); data != nil {
-			switch data {
-
-			default:
-				ctx.Error(msg, StatusTooManyRequests)
-				return
-			}
-
-		}
-
-		ch := ctx.timeoutCh
-		if ch == nil {
-			ch = make(chan struct{}, 1)
-			ctx.timeoutCh = ch
-		}
-		go func() {
-			h(ctx)
-			ch <- struct{}{}
-			concurrencyCh.Read()
-		}()
+		ctx.timeoutCh = make(chan struct{}, 1)
 		ctx.timeoutTimer = initTimer(ctx.timeoutTimer, timeout)
 
-		if data := zenq.Select(ctx.timeoutTimer.C); data != nil {
+		go func() {
+			h(ctx)
+			concurrencyCh.Read()
+			ctx.timeoutCh <- struct{}{}
+		}()
 
-			ctx.TimeoutErrorWithCode(msg, statusCode)
+		data := zenq.Select(ctx.timeoutTimer.C, concurrencyCh)
+		if data != nil {
+			switch data.(type) {
+			case time.Time:
+				ctx.TimeoutErrorWithCode(msg, statusCode)
+			case struct{}:
+				<-ctx.timeoutCh
+			}
 		}
 
-		go func() {
-			<-ch
-		}()
 		stopTimer(ctx.timeoutTimer)
 	}
 }
@@ -1831,6 +1819,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		Logger:                s.logger(),
 		connState:             s.setState,
 	}
+
 	wp.Start()
 
 	// Count our waiting to accept a connection as an open connection.

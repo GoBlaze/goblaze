@@ -2,6 +2,7 @@ package pool
 
 import (
 	"sync"
+	"unsafe"
 )
 
 type No struct{}
@@ -10,10 +11,12 @@ func (*No) Lock()   {}
 func (*No) Unlock() {}
 
 type Pool[T any] struct {
-	_     No
-	_     cacheLinePadding //nolint:unused
-	pools *sync.Pool
+	_ cacheLinePadding
+
+	pools sync.Pool
+	_     [cacheLinePadSize - unsafe.Sizeof(sync.Pool{})]byte
 	put   func(*T)
+	_     [cacheLinePadSize - 8]byte
 }
 
 func (p *Pool[T]) Get() *T  { return p.pools.Get().(*T) }
@@ -28,7 +31,7 @@ func NewPool[T any](get func() *T, put func(*T)) *Pool[T] {
 	}
 
 	return &Pool[T]{
-		pools: &sync.Pool{New: func() any { return get() }},
+		pools: sync.Pool{New: func() any { return get() }},
 		put:   put,
 	}
 }

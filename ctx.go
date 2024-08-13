@@ -50,6 +50,7 @@ type Ctx struct {
 	response *fasthttp.Response
 
 	FormValueFunc FormValueFunc
+
 	*fasthttp.RequestCtx
 
 	next bool
