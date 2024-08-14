@@ -13,22 +13,33 @@ func (*No) Unlock() {}
 type SafeMap[K comparable, V any] struct {
 	_ cacheLinePadding
 
-	data atomic.Pointer[map[K]V]
-	_    [cacheLinePadSize - unsafe.Sizeof(atomic.Pointer[map[K]V]{})]byte
+	data atomic.Value
+	_    [cacheLinePadSize - unsafe.Sizeof(atomic.Value{})]byte
 }
 
 func New[K comparable, V any]() *SafeMap[K, V] {
-
-	m := make(map[K]V)
 	sm := &SafeMap[K, V]{}
+	m := make(map[K]V)
 	sm.data.Store(&m)
 	return sm
 }
 
 func (s *SafeMap[K, V]) Set(k K, v V) {
+	for {
 
-	m := s.data.Load()
-	(*m)[k] = v
+		m := s.data.Load().(*map[K]V)
+
+		newMap := make(map[K]V, len(*m)+1)
+		for key, value := range *m {
+			newMap[key] = value
+		}
+
+		newMap[k] = v
+
+		if s.data.CompareAndSwap(m, &newMap) {
+			break
+		}
+	}
 }
 
 func (s *SafeMap[K, V]) Store(k K, v V) {
@@ -36,35 +47,40 @@ func (s *SafeMap[K, V]) Store(k K, v V) {
 }
 
 func (s *SafeMap[K, V]) Get(k K) (V, bool) {
-
-	m := s.data.Load()
+	m := s.data.Load().(*map[K]V)
 	val, ok := (*m)[k]
 	return val, ok
 }
 
-// Load retrieves the value for the given key and returns whether it exists.
 func (s *SafeMap[K, V]) Load(k K) (V, bool) {
 	return s.Get(k)
 }
 
-// Delete removes the key-value pair from the map.
 func (s *SafeMap[K, V]) Delete(k K) {
+	for {
 
-	m := s.data.Load()
-	delete(*m, k)
+		m := s.data.Load().(*map[K]V)
+
+		newMap := make(map[K]V, len(*m))
+		for key, value := range *m {
+			newMap[key] = value
+		}
+
+		delete(newMap, k)
+
+		if s.data.CompareAndSwap(m, &newMap) {
+			break
+		}
+	}
 }
 
-// Len returns the number of key-value pairs in the map.
 func (s *SafeMap[K, V]) Len() int {
-
-	m := s.data.Load()
+	m := s.data.Load().(*map[K]V)
 	return len(*m)
 }
 
-// ForEach iterates over all key-value pairs in the map and applies the function f.
 func (s *SafeMap[K, V]) ForEach(f func(K, V)) {
-
-	m := s.data.Load()
+	m := s.data.Load().(*map[K]V)
 	for k, v := range *m {
 		f(k, v)
 	}

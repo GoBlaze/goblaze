@@ -201,12 +201,10 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 
-//go:noinline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }

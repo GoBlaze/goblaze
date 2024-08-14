@@ -131,7 +131,6 @@ func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
 //go:linkname sysFreeOS runtime.sysFreeOS
 func sysFreeOS(v unsafe.Pointer, n uintptr)
 
-//go:noinline
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
@@ -139,17 +138,14 @@ func MakeNoZero(l int) []byte {
 // //go:noescape
 // func MakeNoZero(l int) []byte
 
-//go:noinline
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:noinline
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
 
-//go:noinline
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
