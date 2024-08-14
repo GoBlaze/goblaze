@@ -29,11 +29,11 @@ clean:
 	rm -f $(BINARY) $(C_OBJ) $(C_LIB)
 
 bench:
-	@go test  -benchmem   -cpuprofile cpu.prof -memprofile mem.prof -benchtime=10s -timeout 25s -bench . -benchmem ./benchmarks -count 3
+	@go test  -benchmem   -cpuprofile cpu.prof -memprofile mem.prof -benchtime=10s -timeout 120s -bench . -benchmem ./benchmarks -count 3
 	
 
 benchGC:
-	@go test -gcflags="-e" -benchmem   -cpuprofile cpu.prof -memprofile mem.prof -benchtime=10s -timeout 25s -bench . -benchmem ./benchmarks -count 3
+	@go test -gcflags="-e" -benchmem   -cpuprofile cpu.prof -memprofile mem.prof -benchtime=10s -timeout 120s -bench . -benchmem ./benchmarks -count 3
 
 
 memory:
