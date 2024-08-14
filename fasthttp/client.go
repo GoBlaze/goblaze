@@ -1009,23 +1009,19 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 		mu.Lock()
 		if responded {
 			resp := <-ch
-			statusCode = resp.statusCode
-			body = resp.body
-			err = resp.err
+			return resp.statusCode, resp.body, resp.err
+
 		} else {
 			timedout = true
 			err = ErrTimeout
-			body = dst
+
 		}
 		mu.Unlock()
 	}
-	select {
-	case resp := <-ch:
-		statusCode = resp.statusCode
-		body = resp.body
-		err = resp.err
-
-	}
+	resp := <-ch
+	statusCode = resp.statusCode
+	body = resp.body
+	err = resp.err
 	ReleaseTimer(tc)
 
 	clientURLResponseChPool.Put(chv)

@@ -47,10 +47,12 @@ func (d *userData) Set(key, value any) {
 }
 
 func (d *userData) SetBytes(key []byte, value any) {
+
 	d.Set(key, value)
 }
 
 func (d *userData) Get(key any) any {
+
 	if b, ok := key.([]byte); ok {
 		key = b2s(b)
 	}

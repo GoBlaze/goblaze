@@ -127,32 +127,23 @@ func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 	}
 	return wp.MaxIdleWorkerDuration
 }
-
 func (wp *workerPool) clean() {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
 	criticalTime := time.Now().Add(-maxIdleWorkerDuration).UnixNano()
 
 	current := wp.ready.head
-	var prev *workerChan
-
 	for current != nil {
+		next := current.next
 		if current.lastUseTime < criticalTime {
 			current.ch.Close()
 			wp.workerChanPool.Put(current)
-			if prev == nil {
-				wp.ready.head = current.next
-			} else {
-				prev.next = current.next
-			}
-			if current == wp.ready.tail {
-				wp.ready.tail = prev
-			}
-			current = current.next
 		} else {
-			prev = current
-			current = current.next
+			wp.ready.head = current
+			break
 		}
+		current = next
 	}
+	wp.ready.tail = wp.ready.head
 }
 
 func (wp *workerPool) Serve(c net.Conn) bool {
@@ -200,6 +191,7 @@ func (wp *workerPool) release(ch *workerChan) bool {
 	if wp.mustStop.Load() {
 		return false
 	}
+
 	wp.ready.push(ch)
 	return true
 }

@@ -39,7 +39,7 @@ var attachedCtxKey = fmt.Sprintf("__attachedCtx::%x__", time.Now().UnixNano())
 type Ctx struct {
 	_ No // nolint:structcheck,unused
 
-	index int
+	// index int
 
 	searchingOnAttachedCtx int32
 
@@ -55,7 +55,7 @@ type Ctx struct {
 
 	next bool
 
-	skipView bool
+	// skipView bool
 }
 
 func ReleaseRequestCtx(ctx *Ctx) {

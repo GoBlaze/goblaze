@@ -555,19 +555,18 @@ func unhex(c byte) byte {
 
 // validOptionalPort reports whether port is either an empty string
 // or matches /^:\d*$/.
+// validOptionalPort reports whether port is either an empty string
+// or matches /^:\d*$/.
 func validOptionalPort(port []byte) bool {
-	if len(port) == 0 {
+	if len(port) > 1 && port[0] == ':' {
+		for _, b := range port[1:] {
+			if b < '0' || '9' < b {
+				return false
+			}
+		}
 		return true
 	}
-	if port[0] != ':' {
-		return false
-	}
-	for _, b := range port[1:] {
-		if b < '0' || b > '9' {
-			return false
-		}
-	}
-	return true
+	return len(port) == 0
 }
 
 func normalizePath(dst, src []byte) []byte {

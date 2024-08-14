@@ -1,8 +1,8 @@
 package fasthttp
 
 var (
-	defaultServerName  = "fasthttp"
-	defaultUserAgent   = "fasthttp"
+	defaultServerName  = "goblaze"
+	defaultUserAgent   = "goblaze"
 	defaultContentType = []byte("text/plain; charset=utf-8")
 )
 

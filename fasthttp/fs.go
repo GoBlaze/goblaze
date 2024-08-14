@@ -536,7 +536,7 @@ type fsFile struct {
 
 	bigFiles      []*bigFileReader
 	contentLength int
-	readersCount  int
+	readersCount  int32
 
 	bigFilesLock sync.Mutex
 	compressed   bool

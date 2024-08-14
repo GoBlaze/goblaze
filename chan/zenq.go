@@ -233,25 +233,28 @@ func (self *ZenQ[T]) Read() (data T, queueOpen bool) {
 // from a writer goroutine and never from a reader goroutine which might cause the reader to get blocked and hence deadlock
 // It returns if the queue was already closed for writes or not
 func (self *ZenQ[T]) Close() (alreadyClosedForWrites bool) {
-	// This ensures a ZenQ is closed only once even if this function is called multiple times making this operation safe
-	if Load8(&self.globalState) != StateOpen {
-		alreadyClosedForWrites = true
+	if state := Load8(&self.globalState); state != StateOpen {
+		alreadyClosedForWrites = state == StateClosedForWrites
 		return
 	}
+
+	// Change state to closed for writes
 	Store8(&self.globalState, StateClosedForWrites)
-	slot := (*slot[T])(unsafe.Pointer(uintptr(self.strideLength)*(uintptr(self.indexMask)&uintptr(self.writerIndex.Add(1))) + uintptr(self.contents)))
+
+	// Get the slot from the writer index
+	slotIndex := uint16(self.writerIndex.Add(1)) & self.indexMask
+	slot := (*slot[T])(unsafe.Pointer(uintptr(self.contents) + uintptr(slotIndex)*uintptr(self.strideLength)))
 
 	// CAS -> change slot_state to busy if slot_state == empty
 	for !slot.CompareAndSwap(SlotEmpty, SlotBusy) {
 		switch slot.Load() {
-		case SlotBusy, SlotCommitted:
-			mcall(gosched_m)
-		case SlotEmpty:
-			continue
 		case SlotClosed:
 			return
+		default:
+			mcall(gosched_m)
 		}
 	}
+
 	// Closing commit
 	slot.Store(SlotClosed)
 	return

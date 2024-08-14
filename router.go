@@ -13,35 +13,22 @@ type Router struct {
 
 	trees map[string]*node
 
-	Method string
+	Method, Name, Path string
 
-	Name string
-
-	Path string
-
-	NotFound Handler
-
-	MethodNotAllowed Handler
+	NotFound, MethodNotAllowed Handler
 
 	PanicHandler PanicHandler
 
-	RedirectTrailingSlash bool
+	RedirectTrailingSlash, RedirectFixedPath bool
 
-	RedirectFixedPath bool
-
-	HandleMethodNotAllowed bool
-
-	HandleOPTIONS bool
+	HandleMethodNotAllowed, HandleOPTIONS bool
 }
 
 type node struct {
-	_        cacheLinePadding //nolint:unused
-	_        No               // nolint:structcheck,unused
+	_        No // nolint:structcheck,unused
 	children []*node
 
-	path string
-
-	indices string
+	path, indices string
 
 	priority int
 
@@ -664,7 +651,6 @@ func CleanPath(p string) string {
 // //go:noescape
 // func bufApp(buf *[]byte, s string, w int, c byte)
 
-//go:noinline
 func bufApp(buf *[]byte, s string, w int, c byte) {
 
 	if *buf == nil || len(*buf) <= w {

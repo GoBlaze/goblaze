@@ -11,6 +11,7 @@ import (
 	"time"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/GoBlaze/goblaze/safemap"
 )
 
 func Dial(addr string) (net.Conn, error) {
@@ -42,56 +43,10 @@ func DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	return defaultDialer.DialTimeout(addr, timeout)
 }
 
-// DialDualStack dials the given TCP addr using both tcp4 and tcp6.
-//
-// This function has the following additional features comparing to net.Dial:
-//
-//   - It reduces load on DNS resolver by caching resolved TCP addressed
-//     for DNSCacheDuration.
-//   - It dials all the resolved TCP addresses in round-robin manner until
-//     connection is established. This may be useful if certain addresses
-//     are temporarily unreachable.
-//   - It returns ErrDialTimeout if connection cannot be established during
-//     DefaultDialTimeout seconds. Use DialDualStackTimeout for custom dial
-//     timeout.
-//
-// This dialer is intended for custom code wrapping before passing
-// to Client.Dial or HostClient.Dial.
-//
-// For instance, per-host counters and/or limits may be implemented
-// by such wrappers.
-//
-// The addr passed to the function must contain port. Example addr values:
-//
-//   - foobar.baz:443
-//   - foo.bar:80
-//   - aaa.com:8080
 func DialDualStack(addr string) (net.Conn, error) {
 	return defaultDialer.DialDualStack(addr)
 }
 
-// DialDualStackTimeout dials the given TCP addr using both tcp4 and tcp6
-// using the given timeout.
-//
-// This function has the following additional features comparing to net.Dial:
-//
-//   - It reduces load on DNS resolver by caching resolved TCP addressed
-//     for DNSCacheDuration.
-//   - It dials all the resolved TCP addresses in round-robin manner until
-//     connection is established. This may be useful if certain addresses
-//     are temporarily unreachable.
-//
-// This dialer is intended for custom code wrapping before passing
-// to Client.DialTimeout or HostClient.DialTimeout.
-//
-// For instance, per-host counters and/or limits may be implemented
-// by such wrappers.
-//
-// The addr passed to the function must contain port. Example addr values:
-//
-//   - foobar.baz:443
-//   - foo.bar:80
-//   - aaa.com:8080
 func DialDualStackTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	return defaultDialer.DialDualStackTimeout(addr, timeout)
 }
@@ -105,17 +60,6 @@ type Resolver interface {
 
 // TCPDialer contains options to control a group of Dial calls.
 type TCPDialer struct {
-	// This may be used to override DNS resolving policy, like this:
-	// var dialer = &fasthttp.TCPDialer{
-	// 	Resolver: &net.Resolver{
-	// 		PreferGo:     true,
-	// 		StrictErrors: false,
-	// 		Dial: func (ctx context.Context, network, address string) (net.Conn, error) {
-	// 			d := net.Dialer{}
-	// 			return d.DialContext(ctx, "udp", "8.8.8.8:53")
-	// 		},
-	// 	},
-	// }
 	Resolver Resolver
 
 	// LocalAddr is the local address to use when dialing an
@@ -124,8 +68,7 @@ type TCPDialer struct {
 	LocalAddr *net.TCPAddr
 
 	concurrencyCh chan struct{}
-
-	tcpAddrsMap sync.Map
+	// tcpAddrsMap   sync.Map
 
 	// Concurrency controls the maximum number of concurrent Dials
 	// that can be performed using this object.
@@ -310,6 +253,7 @@ func (d *TCPDialer) tryDial(
 			concurrencyCh <- struct{}{}
 
 			if data := zenq.Select(tc.C); data != nil {
+
 				switch data.(type) {
 				case time.Time:
 					isTimeout = true
@@ -387,6 +331,8 @@ type tcpAddrEntry struct {
 	pending int32
 }
 
+var tcpAddrsMap = safemap.New[any, any]()
+
 // DefaultDNSCacheDuration is the duration for caching resolved TCP addresses
 // by Dial* functions.
 const DefaultDNSCacheDuration = time.Minute
@@ -396,17 +342,17 @@ func (d *TCPDialer) tcpAddrsClean() {
 	for {
 		time.Sleep(time.Second)
 		t := time.Now()
-		d.tcpAddrsMap.Range(func(k, v any) bool {
+		tcpAddrsMap.ForEach(func(k, v any) {
 			if e, ok := v.(*tcpAddrEntry); ok && t.Sub(e.resolveTime) > expireDuration {
-				d.tcpAddrsMap.Delete(k)
+				tcpAddrsMap.Delete(k)
 			}
-			return true
+
 		})
 	}
 }
 
 func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool, deadline time.Time) ([]net.TCPAddr, uint32, error) {
-	item, exist := d.tcpAddrsMap.Load(addr)
+	item, exist := tcpAddrsMap.Load(addr)
 	e, ok := item.(*tcpAddrEntry)
 	if exist && ok && e != nil && time.Since(e.resolveTime) > d.DNSCacheDuration {
 		// Only let one goroutine re-resolve at a time.
@@ -418,7 +364,7 @@ func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool, deadline time.Time)
 	if e == nil {
 		addrs, err := resolveTCPAddrs(addr, dualStack, d.Resolver, deadline)
 		if err != nil {
-			item, exist := d.tcpAddrsMap.Load(addr)
+			item, exist := tcpAddrsMap.Load(addr)
 			e, ok = item.(*tcpAddrEntry)
 			if exist && ok && e != nil {
 				// Set pending to 0 so another goroutine can retry.
@@ -431,7 +377,7 @@ func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool, deadline time.Time)
 			addrs:       addrs,
 			resolveTime: time.Now(),
 		}
-		d.tcpAddrsMap.Store(addr, e)
+		tcpAddrsMap.Set(addr, e)
 	}
 
 	idx := atomic.AddUint32(&e.addrsIdx, 1)

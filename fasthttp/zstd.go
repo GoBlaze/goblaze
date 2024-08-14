@@ -155,7 +155,9 @@ func AppendZstdBytes(dst, src []byte) []byte {
 // WriteUnzstd writes unzstd p to w and returns the number of uncompressed
 // bytes written to w.
 func WriteUnzstd(w io.Writer, p []byte) (int, error) {
+
 	r := &byteSliceReader{b: p}
+
 	zr, err := acquireZstdReader(r)
 	if err != nil {
 		return 0, err

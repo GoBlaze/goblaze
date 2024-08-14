@@ -121,7 +121,9 @@ func ip2uint32(ip net.IP) uint32 {
 }
 
 func uint322ip(ip uint32) net.IP {
-	b := MakeNoZero(4)
+
+	b := MakeNoZeroCap(0, 4)
+
 	b[0] = byte(ip >> 24)
 	b[1] = byte(ip >> 16)
 	b[2] = byte(ip >> 8)
