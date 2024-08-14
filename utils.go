@@ -8,7 +8,6 @@ import (
 )
 
 type ErrorSizeUnmatch struct {
-	_          cacheLinePadding
 	fromLength int
 	fromSize   int64
 
@@ -31,19 +30,27 @@ func validatePath(path string) string {
 	return path
 }
 
+//go:noinline
+//go:nosplit
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
+//go:noinline
+//go:nosplit
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+//go:noinline
+//go:nosplit
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
+//go:noinline
+//go:nosplit
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -137,15 +144,20 @@ func MakeNoZero(l int) []byte {
 
 // //go:noescape
 // func MakeNoZero(l int) []byte
-
+//
+//go:noinline
+//go:nosplit
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
+//go:noinline
+//go:nosplit
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
 
+//go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -241,7 +253,6 @@ func (b *StringBuffer) WriteString(s string) (int, error) {
 //go:linkname noescape runtime.noescape
 func noescape(p unsafe.Pointer) unsafe.Pointer
 
-//go:nosplit
 func (b *StringBuffer) copyCheck() {
 	if b.addr == nil {
 
@@ -251,8 +262,6 @@ func (b *StringBuffer) copyCheck() {
 	}
 }
 
-//go:nocheckptr
-//go:noinline
 func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	var (
 		zeroValFrom TFrom
@@ -272,6 +281,7 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 }
 
 //go:noinline
+//go:nosplit
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 	converted, err := ConvertOne[TFrom, TTo](from)
 	if err != nil {
@@ -281,11 +291,13 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 }
 
 //go:noinline
+//go:nosplit
 func isEqual(v1, v2 any) bool {
 	return reflect.ValueOf(v1).Pointer() == reflect.ValueOf(v2).Pointer()
 }
 
 //go:noinline
+//go:nosplit
 func isNil(v any) bool {
 	return reflect.ValueOf(v).IsNil()
 }

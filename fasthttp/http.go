@@ -91,21 +91,23 @@ type Request struct {
 type Response struct {
 	noCopy noCopy
 
+	Header     ResponseHeader
+	bodyRaw    []byte
 	bodyStream io.Reader
 
 	// Remote TCPAddr from concurrently net.Conn.
 	raddr net.Addr
+
 	// Local TCPAddr from concurrently net.Conn.
 	laddr net.Addr
-	w     responseBodyWriter
-	body  *bytebufferpool.ByteBuffer
 
-	bodyRaw []byte
+	w responseBodyWriter
+
+	body *bytebufferpool.ByteBuffer
 
 	// Response header.
 	//
 	// Copying Header by value is forbidden. Use pointer to Header instead.
-	Header ResponseHeader
 
 	// Flush headers as soon as possible without waiting for first body bytes.
 	// Relevant for bodyStream only.
@@ -997,7 +999,7 @@ func (req *Request) MultipartForm() (*multipart.Form, error) {
 
 	if req.bodyStream != nil {
 		bodyStream := req.bodyStream
-		if bytes.Equal(ce, strGzip) {
+		if Equal(ce, strGzip) {
 			// Do not care about memory usage here.
 			if bodyStream, err = gzip.NewReader(bodyStream); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
@@ -1013,7 +1015,7 @@ func (req *Request) MultipartForm() (*multipart.Form, error) {
 		}
 	} else {
 		body := req.bodyBytes()
-		if bytes.Equal(ce, strGzip) {
+		if Equal(ce, strGzip) {
 			// Do not care about memory usage here.
 			if body, err = AppendGunzipBytes(nil, body); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
@@ -1257,7 +1259,7 @@ func (req *Request) readBodyStream(r *bufio.Reader, maxBodySize int, getOnly, pr
 //     with ContinueReadBody.
 //   - Or close the connection.
 func (req *Request) MayContinue() bool {
-	return bytes.Equal(req.Header.peek(strExpect), str100Continue)
+	return Equal(req.Header.peek(strExpect), str100Continue)
 }
 
 // ContinueReadBody reads request body if request header contains
@@ -2134,7 +2136,6 @@ func (resp *Response) String() string {
 
 func getHTTPString(hw httpWriter) string {
 	w := bytebufferpool.Get()
-	defer bytebufferpool.Put(w)
 
 	bw := bufio.NewWriter(w)
 	if err := hw.Write(bw); err != nil {
@@ -2143,6 +2144,7 @@ func getHTTPString(hw httpWriter) string {
 	if err := bw.Flush(); err != nil {
 		return err.Error()
 	}
+	bytebufferpool.Put(w)
 	s := String(w.B)
 	return s
 }

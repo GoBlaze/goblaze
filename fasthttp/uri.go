@@ -218,11 +218,11 @@ func (u *URI) SetSchemeBytes(scheme []byte) {
 }
 
 func (u *URI) isHTTPS() bool {
-	return bytes.Equal(u.scheme, strHTTPS)
+	return Equal(u.scheme, strHTTPS)
 }
 
 func (u *URI) isHTTP() bool {
-	return len(u.scheme) == 0 || bytes.Equal(u.scheme, strHTTP)
+	return len(u.scheme) == 0 || Equal(u.scheme, strHTTP)
 }
 
 // Reset clears uri.
@@ -456,7 +456,7 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 			// But https://tools.ietf.org/html/rfc6874#section-2
 			// introduces %25 being allowed to escape a percent sign
 			// in IPv6 scoped-address literals. Yay.
-			if mode == encodeHost && unhex(s[i+1]) < 8 && !bytes.Equal(s[i:i+3], []byte("%25")) {
+			if mode == encodeHost && unhex(s[i+1]) < 8 && !Equal(s[i:i+3], []byte("%25")) {
 				return nil, EscapeError(s[i : i+3])
 			}
 			if mode == encodeZone {
@@ -468,7 +468,7 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 				// to introduce bytes you couldn't just write directly.
 				// But Windows puts spaces here! Yay.
 				v := unhex(s[i+1])<<4 | unhex(s[i+2])
-				if !bytes.Equal(s[i:i+3], []byte("%25")) && v != ' ' && shouldEscape(v, encodeHost) {
+				if !Equal(s[i:i+3], []byte("%25")) && v != ' ' && shouldEscape(v, encodeHost) {
 					return nil, EscapeError(s[i : i+3])
 				}
 			}

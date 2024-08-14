@@ -152,7 +152,7 @@ func (a *Args) AppendBytes(dst []byte) []byte {
 // WriteTo implements io.WriterTo interface.
 func (a *Args) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(a.QueryString())
-	return MustConvertOne[int, int64](n), err
+	return int64(n), err
 }
 
 // Del deletes argument with the given key from query args.
@@ -259,7 +259,7 @@ func (a *Args) PeekBytes(key []byte) []byte {
 func (a *Args) PeekMulti(key string) [][]byte {
 	var values [][]byte
 	a.VisitAll(func(k, v []byte) {
-		if string(k) == key {
+		if String(k) == key {
 			values = append(values, v)
 		}
 	})
@@ -342,7 +342,7 @@ func (a *Args) GetUfloatOrZero(key string) float64 {
 // true is returned for "1", "t", "T", "true", "TRUE", "True", "y", "yes", "Y", "YES", "Yes",
 // otherwise false is returned.
 func (a *Args) GetBool(key string) bool {
-	switch string(a.Peek(key)) {
+	switch String(a.Peek(key)) {
 	// Support the same true cases as strconv.ParseBool
 	// See: https://github.com/golang/go/blob/4e1b11e2c9bdb0ddea1141eed487be1a626ff5be/src/strconv/atob.go#L12
 	// and Y and Yes versions.
@@ -403,7 +403,7 @@ func delAllArgsBytes(args []argsKV, key []byte) []argsKV {
 func delAllArgs(args []argsKV, key string) []argsKV {
 	for i, n := 0, len(args); i < n; i++ {
 		kv := &args[i]
-		if key == string(kv.key) {
+		if key == String(kv.key) {
 			tmp := *kv
 			copy(args[i:], args[i+1:])
 			n--
@@ -423,7 +423,7 @@ func setArg(h []argsKV, key, value string, noValue bool) []argsKV {
 	n := len(h)
 	for i := 0; i < n; i++ {
 		kv := &h[i]
-		if key == string(kv.key) {
+		if key == String(kv.key) {
 			if noValue {
 				kv.value = kv.value[:0]
 			} else {
@@ -472,7 +472,7 @@ func releaseArg(h []argsKV) []argsKV {
 func hasArg(h []argsKV, key string) bool {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]
-		if key == string(kv.key) {
+		if key == String(kv.key) {
 			return true
 		}
 	}
@@ -482,7 +482,7 @@ func hasArg(h []argsKV, key string) bool {
 func peekArgBytes(h []argsKV, k []byte) []byte {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]
-		if bytes.Equal(kv.key, k) {
+		if Equal(kv.key, k) {
 			return kv.value
 		}
 	}
@@ -492,7 +492,7 @@ func peekArgBytes(h []argsKV, k []byte) []byte {
 func peekArgStr(h []argsKV, k string) []byte {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]
-		if string(kv.key) == k {
+		if String(kv.key) == k {
 			return kv.value
 		}
 	}
@@ -590,11 +590,6 @@ func decodeArgAppend(dst, src []byte) []byte {
 	return dst
 }
 
-// decodeArgAppendNoPlus is almost identical to decodeArgAppend, but it doesn't
-// substitute '+' with ' '.
-//
-// The function is copy-pasted from decodeArgAppend due to the performance
-// reasons only.
 func decodeArgAppendNoPlus(dst, src []byte) []byte {
 	idx := bytes.IndexByte(src, '%')
 	if idx < 0 {
@@ -628,7 +623,7 @@ func decodeArgAppendNoPlus(dst, src []byte) []byte {
 func peekAllArgBytesToDst(dst [][]byte, h []argsKV, k []byte) [][]byte {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]
-		if bytes.Equal(kv.key, k) {
+		if Equal(kv.key, k) {
 			dst = append(dst, kv.value)
 		}
 	}

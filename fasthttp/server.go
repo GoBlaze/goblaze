@@ -598,10 +598,12 @@ type RequestCtx struct {
 
 	time time.Time
 
-	logger     ctxLogger
+	logger ctxLogger
+
 	remoteAddr net.Addr
 
 	c net.Conn
+
 	s *Server
 
 	timeoutResponse *Response
@@ -1149,7 +1151,7 @@ var (
 		if err == nil && mf.Value != nil {
 			vv := mf.Value[key]
 			if len(vv) > 0 {
-				return []byte(vv[0])
+				return StringToBytes(vv[0])
 			}
 		}
 		return nil
@@ -1168,7 +1170,7 @@ var (
 		if err == nil && mf.Value != nil {
 			vv := mf.Value[key]
 			if len(vv) > 0 {
-				return []byte(vv[0])
+				return StringToBytes(vv[0])
 			}
 		}
 		v = ctx.QueryArgs().Peek(key)

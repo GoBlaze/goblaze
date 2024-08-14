@@ -61,6 +61,7 @@ type Resolver interface {
 // TCPDialer contains options to control a group of Dial calls.
 type TCPDialer struct {
 	Resolver Resolver
+	once     sync.Once
 
 	// LocalAddr is the local address to use when dialing an
 	// address.
@@ -80,8 +81,6 @@ type TCPDialer struct {
 
 	// DNSCacheDuration may be used to override the default DNS cache duration (DefaultDNSCacheDuration)
 	DNSCacheDuration time.Duration
-
-	once sync.Once
 
 	// DisableDNSResolution may be used to disable DNS resolution
 	DisableDNSResolution bool
@@ -235,9 +234,7 @@ func (d *TCPDialer) dial(addr string, dualStack bool, timeout time.Duration) (ne
 	return nil, err
 }
 
-func (d *TCPDialer) tryDial(
-	network string, addr string, deadline time.Time, concurrencyCh chan struct{},
-) (net.Conn, error) {
+func (d *TCPDialer) tryDial(network string, addr string, deadline time.Time, concurrencyCh chan struct{}) (net.Conn, error) {
 	timeout := time.Until(deadline)
 	if timeout <= 0 {
 		return nil, wrapDialWithUpstream(ErrDialTimeout, addr)

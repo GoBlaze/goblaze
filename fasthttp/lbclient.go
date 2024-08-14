@@ -84,15 +84,12 @@ func (cc *LBClient) Do(req *Request, resp *Response) error {
 func (cc *LBClient) init() {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
-	if len(cc.Clients) == 0 {
-		// developer sanity-check
-		panic("BUG: LBClient.Clients cannot be empty")
-	}
-	for _, c := range cc.Clients {
-		cc.cs = append(cc.cs, &lbClient{
+	cc.cs = make([]*lbClient, len(cc.Clients))
+	for i, c := range cc.Clients {
+		cc.cs[i] = &lbClient{
 			c:           c,
 			healthCheck: cc.HealthCheck,
-		})
+		}
 	}
 }
 

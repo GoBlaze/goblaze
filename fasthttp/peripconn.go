@@ -26,16 +26,15 @@ func (cc *perIPConnCounter) Register(ip uint32) int {
 
 func (cc *perIPConnCounter) Unregister(ip uint32) {
 	cc.lock.Lock()
-	defer cc.lock.Unlock()
-	if cc.m == nil {
-		// developer safeguard
-		panic("BUG: perIPConnCounter.Register() wasn't called")
+	if m := cc.m; m != nil {
+		if n := m[ip]; n > 0 {
+			m[ip] = n - 1
+		} else {
+			// developer safeguard
+			panic("BUG: perIPConnCounter.Register() wasn't called")
+		}
 	}
-	n := cc.m[ip] - 1
-	if n < 0 {
-		n = 0
-	}
-	cc.m[ip] = n
+	cc.lock.Unlock()
 }
 
 type perIPConn struct {

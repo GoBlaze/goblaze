@@ -21,15 +21,8 @@ func (err *ErrorSizeUnmatch) Error() string {
 		err.fromLength, err.fromSize, err.toSize)
 }
 
-// validatePath checks if the path starts with a '/' and panics if not.
-// It also returns the path.
-func validatePath(path string) string {
-	if len(path) == 0 || path[0] != '/' {
-		panic("path must begin with '/'")
-	}
-	return path
-}
-
+//go:noinline
+//go:nosplit
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
@@ -84,14 +77,20 @@ const (
 	// 			to gWaiting to take responsibility for ready()ing this G.
 )
 
+//go:noinline
+//go:nosplit
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+//go:noinline
+//go:nosplit
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
+//go:noinline
+//go:nosplit
 func Copy(b []byte, b1 []byte) ([]byte, []byte) {
 	return []byte(String(b)), []byte(String(b1))
 }
@@ -200,10 +199,13 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 
+//go:noinline
+//go:nosplit
 func MakeNoZero(l int) []byte {
 	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
+//go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
@@ -296,7 +298,6 @@ func (b *StringBuffer) WriteString(s string) (int, error) {
 	return len(s), nil
 }
 
-//go:nosplit
 //go:linkname noescape runtime.noescape
 func noescape(p unsafe.Pointer) unsafe.Pointer
 
@@ -327,6 +328,7 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
+//go:nosplit
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 	// #nosec G103
@@ -334,21 +336,48 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 }
 
+//go:noinline
+//go:nosplit
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
+//go:noinline
+//go:nosplit
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
 
+// //go:linkname memequal runtime.memequal
+// func memequal(a, b unsafe.Pointer, size uintptr) bool
+
+// // func Equal(a, b []byte) bool {
+// // 	if len(a) != len(b) {
+// // 		return false
+// // 	}
+
+// // 	if len(a) == 0 {
+// // 		return true
+// // 	}
+
+// // 	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
+// // }
+
 //go:noinline
-func isEqual(v1, v2 any) bool {
-	return reflect.ValueOf(v1).Pointer() == reflect.ValueOf(v2).Pointer()
+//go:nosplit
+func Equal(a, b []byte) bool {
+	return String(a) == String(b)
 }
 
 //go:noinline
+//go:nosplit
 func isNil(v any) bool {
 
 	return reflect.ValueOf(v).IsNil()
+}
+
+//go:noinline
+//go:nosplit
+func isEqual(v1, v2 any) bool {
+	return unsafe.Pointer(&v1) == unsafe.Pointer(&v2)
 }

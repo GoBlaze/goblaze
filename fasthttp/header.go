@@ -755,13 +755,13 @@ func (h *RequestHeader) Protocol() []byte {
 // SetProtocol sets HTTP request protocol.
 func (h *RequestHeader) SetProtocol(method string) {
 	h.proto = append(h.proto[:0], method...)
-	h.noHTTP11 = !bytes.Equal(h.proto, strHTTP11)
+	h.noHTTP11 = !Equal(h.proto, strHTTP11)
 }
 
 // SetProtocolBytes sets HTTP request protocol.
 func (h *RequestHeader) SetProtocolBytes(method []byte) {
 	h.proto = append(h.proto[:0], method...)
-	h.noHTTP11 = !bytes.Equal(h.proto, strHTTP11)
+	h.noHTTP11 = !Equal(h.proto, strHTTP11)
 }
 
 // RequestURI returns RequestURI from the first HTTP request line.
@@ -1401,7 +1401,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 			h.SetContentEncodingBytes(value)
 			return true
 		case caseInsensitiveCompare(strConnection, key):
-			if bytes.Equal(strClose, value) {
+			if Equal(strClose, value) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -1462,7 +1462,7 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 			}
 			return true
 		case caseInsensitiveCompare(strConnection, key):
-			if bytes.Equal(strClose, value) {
+			if Equal(strClose, value) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -2493,12 +2493,12 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 		// Exclude trailer from header
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.key, t.key) {
+			if Equal(kv.key, t.key) {
 				exclude = true
 				break
 			}
 		}
-		if !exclude && (h.noDefaultDate || !bytes.Equal(kv.key, strDate)) {
+		if !exclude && (h.noDefaultDate || !Equal(kv.key, strDate)) {
 			dst = appendHeaderLine(dst, kv.key, kv.value)
 		}
 	}
@@ -2626,7 +2626,7 @@ func (h *RequestHeader) AppendBytes(dst []byte) []byte {
 		// Exclude trailer from header
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.key, t.key) {
+			if Equal(kv.key, t.key) {
 				exclude = true
 				break
 			}
@@ -2834,7 +2834,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		}
 		return 0, fmt.Errorf("cannot find whitespace in the first line of response %q", buf)
 	}
-	h.noHTTP11 = !bytes.Equal(b[:n], strHTTP11)
+	h.noHTTP11 = !Equal(b[:n], strHTTP11)
 	b = b[n+1:]
 
 	// parse status code
@@ -2929,7 +2929,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("unsupported HTTP version %q in %q", protoStr, buf)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, strHTTP11)
+	h.noHTTP11 = !Equal(protoStr, strHTTP11)
 	h.proto = append(h.proto[:0], protoStr...)
 	h.requestURI = append(h.requestURI[:0], b[:n]...)
 
@@ -3016,7 +3016,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 			if caseInsensitiveCompare(s.key, strConnection) {
-				if bytes.Equal(s.value, strClose) {
+				if Equal(s.value, strClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false
@@ -3037,7 +3037,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			}
 		case 't':
 			if caseInsensitiveCompare(s.key, strTransferEncoding) {
-				if len(s.value) > 0 && !bytes.Equal(s.value, strIdentity) {
+				if len(s.value) > 0 && !Equal(s.value, strIdentity) {
 					h.contentLength = -1
 					h.h = setArgBytes(h.h, strTransferEncoding, strChunked, argsHasValue)
 				}
@@ -3145,7 +3145,7 @@ func (h *RequestHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 			if caseInsensitiveCompare(s.key, strConnection) {
-				if bytes.Equal(s.value, strClose) {
+				if Equal(s.value, strClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false

@@ -31,6 +31,8 @@ func stopTimer(t *tick.Timer) {
 		switch data.(type) {
 		case time.Time:
 
+		default:
+
 		}
 
 	}
