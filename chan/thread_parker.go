@@ -10,6 +10,7 @@ import (
 // Uses the same lock-free linked list implementation as in `list.go`
 type ThreadParker[T any] struct {
 	head atomic.Pointer[parkSpot[T]]
+
 	tail atomic.Pointer[parkSpot[T]]
 }
 
