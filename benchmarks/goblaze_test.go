@@ -9,8 +9,8 @@ import (
 )
 
 func helloHandler(ctx *goblaze.Ctx) error {
-	ctx.SetStatusCode(fasthttp.StatusOK)
-	ctx.SetBodyString("Hello, world!")
+
+	ctx.WriteString("Hello, world!")
 	return nil
 }
 

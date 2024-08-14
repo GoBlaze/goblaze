@@ -186,7 +186,6 @@ func swap[T any](a, b *T) {
 	*b = tmp
 }
 
-//go:nosplit
 //go:linkname mallocgc runtime.mallocgc
 func mallocgc(size uintptr, typ unsafe.Pointer, needzero bool) unsafe.Pointer
 
