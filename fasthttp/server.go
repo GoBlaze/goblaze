@@ -11,7 +11,6 @@ import (
 	"mime/multipart"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1950,7 +1949,7 @@ func acceptConn(s *Server, ln net.Listener, lastPerIPErrorTime *time.Time) (net.
 				time.Sleep(time.Second)
 				continue
 			}
-			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err != io.EOF && !Contains(StringToBytes(err.Error()), StringToBytes("use of closed network connection")) {
 				s.logger().Printf("Permanent error when accepting new connections: %v", err)
 				return nil, err
 			}
@@ -2756,7 +2755,7 @@ func (ctx *RequestCtx) Done() *zenq.ZenQ[struct{}] {
 	done := ctx.s.done
 
 	if done == nil {
-		done = zenq.New[struct{}](1)
+		done = zenq.New[struct{}](0)
 		done.Write(struct{}{})
 		ctx.s.done = done
 	}

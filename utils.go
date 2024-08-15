@@ -138,8 +138,14 @@ func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
 //go:linkname sysFreeOS runtime.sysFreeOS
 func sysFreeOS(v unsafe.Pointer, n uintptr)
 
+//go:linkname sysAlloc runtime.sysAlloc
+func sysAlloc(n uintptr) unsafe.Pointer
+
+//go:noinline
+//go:nosplit
 func MakeNoZero(l int) []byte {
-	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
+	return unsafe.Slice((*byte)(sysAlloc(uintptr(l))), l)
+
 }
 
 // //go:noescape
@@ -148,13 +154,30 @@ func MakeNoZero(l int) []byte {
 //go:noinline
 //go:nosplit
 func MakeNoZeroString(l int) []string {
-	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
+	return unsafe.Slice((*string)(sysAlloc(uintptr(l))), l)
 }
 
 //go:noinline
 //go:nosplit
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
+}
+
+// don't forget free memory after sysalloc!!!!!!!!!
+func FreeMemory(ptr unsafe.Pointer, size uintptr) {
+	sysFree(ptr, size, nil)
+}
+
+func FreeNoZero(b []byte) {
+	if len(b) > 0 {
+		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
+	}
+}
+
+func FreeNoZeroString(strs []string) {
+	if len(strs) > 0 {
+		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
+	}
 }
 
 //go:nosplit
@@ -279,6 +302,12 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 
 	return value, nil
 }
+
+//go:noescape
+func Compare(a []byte, b []byte) bool
+
+//go:noescape
+func Contains(a, b []byte) bool
 
 //go:noinline
 //go:nosplit

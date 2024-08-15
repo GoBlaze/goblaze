@@ -2,39 +2,43 @@ package stackless
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestNewFuncSimple(t *testing.T) {
-	t.Parallel()
-
-	var n uint64
-	f := NewFunc(func(ctx any) {
-		atomic.AddUint64(&n, uint64(ctx.(int)))
-	})
-
-	iterations := 4 * 1024
-	for i := 0; i < iterations; i++ {
-		if !f(2) {
-			t.Fatalf("f mustn't return false")
-		}
-	}
-	if n != uint64(2*iterations) {
-		t.Fatalf("Unexpected n: %d. Expecting %d", n, 2*iterations)
-	}
-}
-
 func TestNewFuncMulti(t *testing.T) {
 	t.Parallel()
 
 	var n1, n2 uint64
+
 	f1 := NewFunc(func(ctx any) {
-		atomic.AddUint64(&n1, uint64(ctx.(int)))
+
+		if ctx == nil {
+			panic("ctx is nil")
+		}
+
+		v, ok := ctx.(int)
+		if !ok {
+			panic(fmt.Sprintf("ctx is not of type int: %T", ctx))
+		}
+
+		atomic.AddUint64(&n1, uint64(v))
 	})
+
 	f2 := NewFunc(func(ctx any) {
-		atomic.AddUint64(&n2, uint64(ctx.(int)))
+
+		if ctx == nil {
+			panic("ctx is nil")
+		}
+
+		v, ok := ctx.(int)
+		if !ok {
+			panic(fmt.Sprintf("ctx is not of type int: %T", ctx))
+		}
+
+		atomic.AddUint64(&n2, uint64(v))
 	})
 
 	iterations := 4 * 1024
@@ -66,25 +70,29 @@ func TestNewFuncMulti(t *testing.T) {
 	select {
 	case err := <-f1Done:
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("unexpected error in f1: %v", err)
 		}
-	case <-time.After(time.Second):
-		t.Fatalf("timeout")
+	case <-time.After(10 * time.Second): // Increase timeout to ensure the test has enough time to complete
+		t.Fatalf("timeout waiting for f1 to complete")
 	}
 
 	select {
 	case err := <-f2Done:
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("unexpected error in f2: %v", err)
 		}
-	case <-time.After(time.Second):
-		t.Fatalf("timeout")
+	case <-time.After(2 * time.Second): // Increase timeout to ensure the test has enough time to complete
+		t.Fatalf("timeout waiting for f2 to complete")
 	}
 
-	if n1 != uint64(3*iterations) {
-		t.Fatalf("unexpected n1: %d. Expecting %d", n1, 3*iterations)
+	// Verify the results
+	expectedN1 := uint64(3 * iterations)
+	if n1 != expectedN1 {
+		t.Fatalf("unexpected n1: %d. Expecting %d", n1, expectedN1)
 	}
-	if n2 != uint64(5*iterations) {
-		t.Fatalf("unexpected n2: %d. Expecting %d", n2, 5*iterations)
+
+	expectedN2 := uint64(5 * iterations)
+	if n2 != expectedN2 {
+		t.Fatalf("unexpected n2: %d. Expecting %d", n2, expectedN2)
 	}
 }

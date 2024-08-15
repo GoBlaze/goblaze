@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"sync"
 
+	"github.com/GoBlaze/goblaze/buffer"
 	"github.com/GoBlaze/goblaze/fasthttp/stackless"
 	"github.com/klauspost/compress/flate"
 	"github.com/klauspost/compress/gzip"
@@ -262,7 +263,7 @@ func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 func WriteDeflateLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
-		*bytes.Buffer,
+		*buffer.Buffer,
 		*bytebufferpool.ByteBuffer:
 		// These writers don't block, so we can just use stacklessWriteDeflate
 		ctx := &compressCtx{

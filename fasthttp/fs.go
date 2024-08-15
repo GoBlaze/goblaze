@@ -1289,6 +1289,7 @@ func (h *fsHandler) createDirIndex(ctx *RequestCtx, dirPath string, mustCompress
 
 	fm := make(map[string]fs.FileInfo, len(dirEntries))
 	filenames := MakeNoZeroCapString(0, len(dirEntries))
+	defer FreeNoZeroString(filenames)
 nestedContinue:
 	for _, de := range dirEntries {
 		name := de.Name()

@@ -1604,6 +1604,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 			tl := nb + base64.StdEncoding.EncodedLen(nl)
 			if tl > cap(req.Header.bufKV.value) {
 				req.Header.bufKV.value = MakeNoZeroCap(0, tl)
+
 			}
 			buf := req.Header.bufKV.value[:0]
 			buf = append(buf, uri.username...)
@@ -1612,6 +1613,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 			buf = append(buf, strBasicSpace...)
 			base64.StdEncoding.Encode(buf[nb:tl], buf[:nl])
 			req.Header.SetBytesKV(strAuthorization, buf[nl:tl])
+			FreeNoZero(req.Header.bufKV.value)
 		}
 	}
 
@@ -2305,6 +2307,7 @@ func readBodyIdentity(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, err
 	dst = dst[:cap(dst)]
 	if len(dst) == 0 {
 		dst = MakeNoZero(4096)
+
 	}
 	offset := 0
 	for {
@@ -2329,13 +2332,16 @@ func readBodyIdentity(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, err
 				n = maxBodySize + 1
 			}
 			b := MakeNoZero(n)
+
 			copy(b, dst)
 			dst = b
+			FreeNoZero(dst)
 		}
 	}
 }
 
 func appendBodyFixedSize(r *bufio.Reader, dst []byte, n int) ([]byte, error) {
+
 	if n == 0 {
 		return dst, nil
 	}
@@ -2343,8 +2349,9 @@ func appendBodyFixedSize(r *bufio.Reader, dst []byte, n int) ([]byte, error) {
 	offset := len(dst)
 	dstLen := offset + n
 	if cap(dst) < dstLen {
-		b := MakeNoZero(roundUpForSliceCap(dstLen))
+		b := MakeNoZero(roundUpForSliceCap(dstLen)) // where can i clear memory :((((((((
 		copy(b, dst)
+
 		dst = b
 	}
 	dst = dst[:dstLen]
@@ -2362,7 +2369,9 @@ func appendBodyFixedSize(r *bufio.Reader, dst []byte, n int) ([]byte, error) {
 			}
 		}
 		offset += nn
+
 		if offset == dstLen {
+
 			return dst, nil
 		}
 	}
@@ -2396,7 +2405,7 @@ func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 		if err != nil {
 			return dst, err
 		}
-		if !bytes.Equal(dst[len(dst)-strCRLFLen:], strCRLF) {
+		if !Equal(dst[len(dst)-strCRLFLen:], strCRLF) {
 			return dst, ErrBrokenChunk{
 				error: errors.New("cannot find crlf at the end of chunk"),
 			}

@@ -1,11 +1,11 @@
 package fasthttp
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"sync"
 
+	"github.com/GoBlaze/goblaze/buffer"
 	"github.com/GoBlaze/goblaze/fasthttp/stackless"
 	"github.com/klauspost/compress/zstd"
 	"github.com/valyala/bytebufferpool"
@@ -111,7 +111,7 @@ func WriteZstdLevel(w io.Writer, p []byte, level int) (int, error) {
 	level = normalizeZstdCompressLevel(level)
 	switch w.(type) {
 	case *byteSliceWriter,
-		*bytes.Buffer,
+		*buffer.Buffer,
 		*bytebufferpool.ByteBuffer:
 		ctx := &compressCtx{
 			w:     w,

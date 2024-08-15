@@ -3,6 +3,8 @@ package stackless
 import (
 	"runtime"
 	"sync"
+
+	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
 // NewFunc returns stackless wrapper for the function f.
@@ -18,13 +20,13 @@ import (
 //
 // The stackless wrapper returns false if the call cannot be processed
 // at the moment due to high load.
+
 func NewFunc(f func(ctx any)) func(ctx any) bool {
 	if f == nil {
-		// developer sanity-check
 		panic("BUG: f cannot be nil")
 	}
 
-	funcWorkCh := make(chan *funcWork, runtime.GOMAXPROCS(-1)*2048)
+	funcWorkCh := zenq.New[*funcWork](uint32(runtime.GOMAXPROCS(-1) * 2048))
 	onceInit := func() {
 		n := runtime.GOMAXPROCS(-1)
 		for i := 0; i < n; i++ {
@@ -34,26 +36,34 @@ func NewFunc(f func(ctx any)) func(ctx any) bool {
 	var once sync.Once
 
 	return func(ctx any) bool {
+		if ctx == nil {
+			panic("BUG: ctx cannot be nil")
+		}
+
 		once.Do(onceInit)
 		fw := getFuncWork()
 		fw.ctx = ctx
 
-		select {
-		case funcWorkCh <- fw:
-		default:
+		if funcWorkCh.Write(fw) {
 			putFuncWork(fw)
 			return false
 		}
-		<-fw.done
+
+		fw.done.Read()
+
 		putFuncWork(fw)
 		return true
 	}
 }
 
-func funcWorker(funcWorkCh <-chan *funcWork, f func(ctx any)) {
-	for fw := range funcWorkCh {
-		f(fw.ctx)
-		fw.done <- struct{}{}
+func funcWorker(funcWorkCh *zenq.ZenQ[*funcWork], f func(ctx any)) {
+
+	for {
+		if fw, open := funcWorkCh.Read(); open {
+
+			f(fw.ctx)
+			fw.done.Write(struct{}{})
+		}
 	}
 }
 
@@ -61,13 +71,14 @@ func getFuncWork() *funcWork {
 	v := funcWorkPool.Get()
 	if v == nil {
 		v = &funcWork{
-			done: make(chan struct{}, 1),
+			done: zenq.New[struct{}](0),
 		}
 	}
 	return v.(*funcWork)
 }
 
 func putFuncWork(fw *funcWork) {
+
 	fw.ctx = nil
 	funcWorkPool.Put(fw)
 }
@@ -76,5 +87,5 @@ var funcWorkPool sync.Pool
 
 type funcWork struct {
 	ctx  any
-	done chan struct{}
+	done *zenq.ZenQ[struct{}]
 }

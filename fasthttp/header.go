@@ -353,7 +353,7 @@ func (h *ResponseHeader) addVaryBytes(value []byte) {
 	if len(v) == 0 {
 		// 'Vary' is not set
 		h.SetBytesV(HeaderVary, value)
-	} else if !bytes.Contains(v, value) {
+	} else if !Compare(v, value) {
 		// 'Vary' is set and not contains target value
 		h.SetBytesV(HeaderVary, append(append(v, ','), value...))
 	} // else: 'Vary' is set and contains target value
@@ -1388,19 +1388,19 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case caseInsensitiveCompare(strContentType, key):
+		case Compare(strContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case caseInsensitiveCompare(strContentLength, key):
+		case Compare(strContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
 			}
 			return true
-		case caseInsensitiveCompare(strContentEncoding, key):
+		case Compare(strContentEncoding, key):
 			h.SetContentEncodingBytes(value)
 			return true
-		case caseInsensitiveCompare(strConnection, key):
+		case Compare(strConnection, key):
 			if Equal(strClose, value) {
 				h.SetConnectionClose()
 			} else {
@@ -1410,10 +1410,10 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 			return true
 		}
 	case 's':
-		if caseInsensitiveCompare(strServer, key) {
+		if Compare(strServer, key) {
 			h.SetServerBytes(value)
 			return true
-		} else if caseInsensitiveCompare(strSetCookie, key) {
+		} else if Compare(strSetCookie, key) {
 			var kv *argsKV
 			h.cookies, kv = allocArg(h.cookies)
 			kv.key = getCookieKey(kv.key, value)
@@ -1421,15 +1421,15 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 			return true
 		}
 	case 't':
-		if caseInsensitiveCompare(strTransferEncoding, key) {
+		if Compare(strTransferEncoding, key) {
 			// Transfer-Encoding is managed automatically.
 			return true
-		} else if caseInsensitiveCompare(strTrailer, key) {
+		} else if Compare(strTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 	case 'd':
-		if caseInsensitiveCompare(strDate, key) {
+		if Compare(strDate, key) {
 			// Date is managed automatically.
 			return true
 		}
@@ -1452,16 +1452,16 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case caseInsensitiveCompare(strContentType, key):
+		case Compare(strContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case caseInsensitiveCompare(strContentLength, key):
+		case Compare(strContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
 			}
 			return true
-		case caseInsensitiveCompare(strConnection, key):
+		case Compare(strConnection, key):
 			if Equal(strClose, value) {
 				h.SetConnectionClose()
 			} else {
@@ -1469,26 +1469,26 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 				h.setNonSpecial(key, value)
 			}
 			return true
-		case caseInsensitiveCompare(strCookie, key):
+		case Compare(strCookie, key):
 			h.collectCookies()
 			h.cookies = parseRequestCookies(h.cookies, value)
 			return true
 		}
 	case 't':
-		if caseInsensitiveCompare(strTransferEncoding, key) {
+		if Compare(strTransferEncoding, key) {
 			// Transfer-Encoding is managed automatically.
 			return true
-		} else if caseInsensitiveCompare(strTrailer, key) {
+		} else if Compare(strTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 	case 'h':
-		if caseInsensitiveCompare(strHost, key) {
+		if Compare(strHost, key) {
 			h.SetHostBytes(value)
 			return true
 		}
 	case 'u':
-		if caseInsensitiveCompare(strUserAgent, key) {
+		if Compare(strUserAgent, key) {
 			h.SetUserAgentBytes(value)
 			return true
 		}
@@ -2779,39 +2779,39 @@ func isBadTrailer(key []byte) bool {
 
 	switch key[0] | 0x20 {
 	case 'a':
-		return caseInsensitiveCompare(key, strAuthorization)
+		return Compare(key, strAuthorization)
 	case 'c':
-		if len(key) > len(HeaderContentType) && caseInsensitiveCompare(key[:8], strContentType[:8]) {
+		if len(key) > len(HeaderContentType) && Compare(key[:8], strContentType[:8]) {
 			// skip compare prefix 'Content-'
-			return caseInsensitiveCompare(key[8:], strContentEncoding[8:]) ||
-				caseInsensitiveCompare(key[8:], strContentLength[8:]) ||
-				caseInsensitiveCompare(key[8:], strContentType[8:]) ||
-				caseInsensitiveCompare(key[8:], strContentRange[8:])
+			return Compare(key[8:], strContentEncoding[8:]) ||
+				Compare(key[8:], strContentLength[8:]) ||
+				Compare(key[8:], strContentType[8:]) ||
+				Compare(key[8:], strContentRange[8:])
 		}
-		return caseInsensitiveCompare(key, strConnection)
+		return Compare(key, strConnection)
 	case 'e':
-		return caseInsensitiveCompare(key, strExpect)
+		return Compare(key, strExpect)
 	case 'h':
-		return caseInsensitiveCompare(key, strHost)
+		return Compare(key, strHost)
 	case 'k':
-		return caseInsensitiveCompare(key, strKeepAlive)
+		return Compare(key, strKeepAlive)
 	case 'm':
-		return caseInsensitiveCompare(key, strMaxForwards)
+		return Compare(key, strMaxForwards)
 	case 'p':
-		if len(key) > len(HeaderProxyConnection) && caseInsensitiveCompare(key[:6], strProxyConnection[:6]) {
+		if len(key) > len(HeaderProxyConnection) && Compare(key[:6], strProxyConnection[:6]) {
 			// skip compare prefix 'Proxy-'
-			return caseInsensitiveCompare(key[6:], strProxyConnection[6:]) ||
-				caseInsensitiveCompare(key[6:], strProxyAuthenticate[6:]) ||
-				caseInsensitiveCompare(key[6:], strProxyAuthorization[6:])
+			return Compare(key[6:], strProxyConnection[6:]) ||
+				Compare(key[6:], strProxyAuthenticate[6:]) ||
+				Compare(key[6:], strProxyAuthorization[6:])
 		}
 	case 'r':
-		return caseInsensitiveCompare(key, strRange)
+		return Compare(key, strRange)
 	case 't':
-		return caseInsensitiveCompare(key, strTE) ||
-			caseInsensitiveCompare(key, strTrailer) ||
-			caseInsensitiveCompare(key, strTransferEncoding)
+		return Compare(key, strTE) ||
+			Compare(key, strTrailer) ||
+			Compare(key, strTransferEncoding)
 	case 'w':
-		return caseInsensitiveCompare(key, strWWWAuthenticate)
+		return Compare(key, strWWWAuthenticate)
 	}
 	return false
 }
@@ -2994,15 +2994,15 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 		switch s.key[0] | 0x20 {
 		case 'c':
-			if caseInsensitiveCompare(s.key, strContentType) {
+			if Compare(s.key, strContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strContentEncoding) {
+			if Compare(s.key, strContentEncoding) {
 				h.contentEncoding = append(h.contentEncoding[:0], s.value...)
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strContentLength) {
+			if Compare(s.key, strContentLength) {
 				if h.contentLength != -1 {
 					var err error
 					h.contentLength, err = parseContentLength(s.value)
@@ -3015,7 +3015,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				}
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strConnection) {
+			if Compare(s.key, strConnection) {
 				if Equal(s.value, strClose) {
 					h.connectionClose = true
 				} else {
@@ -3025,25 +3025,25 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 		case 's':
-			if caseInsensitiveCompare(s.key, strServer) {
+			if Compare(s.key, strServer) {
 				h.server = append(h.server[:0], s.value...)
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strSetCookie) {
+			if Compare(s.key, strSetCookie) {
 				h.cookies, kv = allocArg(h.cookies)
 				kv.key = getCookieKey(kv.key, s.value)
 				kv.value = append(kv.value[:0], s.value...)
 				continue
 			}
 		case 't':
-			if caseInsensitiveCompare(s.key, strTransferEncoding) {
+			if Compare(s.key, strTransferEncoding) {
 				if len(s.value) > 0 && !Equal(s.value, strIdentity) {
 					h.contentLength = -1
 					h.h = setArgBytes(h.h, strTransferEncoding, strChunked, argsHasValue)
 				}
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strTrailer) {
+			if Compare(s.key, strTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -3111,21 +3111,21 @@ func (h *RequestHeader) parseHeaders(buf []byte) (int, error) {
 
 		switch s.key[0] | 0x20 {
 		case 'h':
-			if caseInsensitiveCompare(s.key, strHost) {
+			if Compare(s.key, strHost) {
 				h.host = append(h.host[:0], s.value...)
 				continue
 			}
 		case 'u':
-			if caseInsensitiveCompare(s.key, strUserAgent) {
+			if Compare(s.key, strUserAgent) {
 				h.userAgent = append(h.userAgent[:0], s.value...)
 				continue
 			}
 		case 'c':
-			if caseInsensitiveCompare(s.key, strContentType) {
+			if Compare(s.key, strContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strContentLength) {
+			if Compare(s.key, strContentLength) {
 				if contentLengthSeen {
 					h.connectionClose = true
 					return 0, errors.New("duplicate Content-Length header")
@@ -3144,7 +3144,7 @@ func (h *RequestHeader) parseHeaders(buf []byte) (int, error) {
 				}
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strConnection) {
+			if Compare(s.key, strConnection) {
 				if Equal(s.value, strClose) {
 					h.connectionClose = true
 				} else {
@@ -3154,9 +3154,9 @@ func (h *RequestHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 		case 't':
-			if caseInsensitiveCompare(s.key, strTransferEncoding) {
-				isIdentity := caseInsensitiveCompare(s.value, strIdentity)
-				isChunked := caseInsensitiveCompare(s.value, strChunked)
+			if Compare(s.key, strTransferEncoding) {
+				isIdentity := Compare(s.value, strIdentity)
+				isChunked := Compare(s.value, strChunked)
 
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
@@ -3172,7 +3172,7 @@ func (h *RequestHeader) parseHeaders(buf []byte) (int, error) {
 				}
 				continue
 			}
-			if caseInsensitiveCompare(s.key, strTrailer) {
+			if Compare(s.key, strTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -3207,7 +3207,7 @@ func (h *RequestHeader) collectCookies() {
 
 	for i, n := 0, len(h.h); i < n; i++ {
 		kv := &h.h[i]
-		if caseInsensitiveCompare(kv.key, strCookie) {
+		if Compare(kv.key, strCookie) {
 			h.cookies = parseRequestCookies(h.cookies, kv.value)
 			tmp := *kv
 			copy(h.h[i:], h.h[i+1:])
@@ -3400,7 +3400,7 @@ func hasHeaderValue(s, value []byte) bool {
 	var vs headerValueScanner
 	vs.b = s
 	for vs.next() {
-		if caseInsensitiveCompare(vs.value, value) {
+		if Compare(vs.value, value) {
 			return true
 		}
 	}

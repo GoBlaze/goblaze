@@ -1,4 +1,4 @@
-package fasthttp
+package buffer
 
 import (
 	"fmt"
@@ -10,8 +10,7 @@ import (
 type ErrorSizeUnmatch struct {
 	fromLength int
 	fromSize   int64
-
-	toSize int64
+	toSize     int64
 }
 
 func (err *ErrorSizeUnmatch) Error() string {
@@ -77,6 +76,8 @@ const (
 	// 			to gWaiting to take responsibility for ready()ing this G.
 )
 
+//go:noinline
+//go:nosplit
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
@@ -129,12 +130,6 @@ func CopyString(s string) string {
 	copy(c, StringToBytes(s))
 	return String(c)
 }
-
-// //go:noescape
-// func Compare(a []byte, b []byte) bool
-
-//go:noescape
-func Contains(a, b []byte) bool
 
 func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	var (
@@ -198,9 +193,6 @@ func sysFree(v unsafe.Pointer, n uintptr, sysStat unsafe.Pointer)
 //go:linkname sysFreeOS runtime.sysFreeOS
 func sysFreeOS(v unsafe.Pointer, n uintptr)
 
-//go:linkname sysAlloc runtime.sysAlloc
-func sysAlloc(n uintptr) unsafe.Pointer
-
 // inline is a compiler hint that tells the compiler to inline the function.
 // This can result in faster execution, but it can also increase the size of the executable.
 // The compiler is free to ignore this hint, so it should not be relied upon.
@@ -209,25 +201,7 @@ func sysAlloc(n uintptr) unsafe.Pointer
 //go:noinline
 //go:nosplit
 func MakeNoZero(l int) []byte {
-	return unsafe.Slice((*byte)(sysAlloc(uintptr(l))), l)
-
-}
-
-// don't forget free memory after sysalloc!!!!!!!!!
-func FreeMemory(ptr unsafe.Pointer, size uintptr) {
-	sysFree(ptr, size, nil)
-}
-
-func FreeNoZero(b []byte) {
-	if len(b) > 0 {
-		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
-	}
-}
-
-func FreeNoZeroString(strs []string) {
-	if len(strs) > 0 {
-		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
-	}
+	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l)
 }
 
 //go:nosplit
@@ -247,7 +221,6 @@ func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
 }
 
 type StringBuffer struct {
-	_    noCopy // nolint:structcheck
 	buf  []byte
 	addr *StringBuffer
 }
@@ -353,6 +326,7 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
+//go:nosplit
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 	// #nosec G103
@@ -360,10 +334,14 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 }
 
+//go:noinline
+//go:nosplit
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
+//go:noinline
+//go:nosplit
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
@@ -383,6 +361,8 @@ func MakeNoZeroCapString(l int, c int) []string {
 // // 	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
 // // }
 
+//go:noinline
+//go:nosplit
 func Equal(a, b []byte) bool {
 	return String(a) == String(b)
 }
