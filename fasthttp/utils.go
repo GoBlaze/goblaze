@@ -213,6 +213,23 @@ func MakeNoZero(l int) []byte {
 
 }
 
+func MakeMapNoZero[K comparable, V any](l int) map[K]V {
+	if l == 0 {
+		return nil
+	}
+	header := (*reflect.SliceHeader)(unsafe.Pointer(&l))
+	header.Len = l
+	header.Cap = l
+	result := *(*[]unsafe.Pointer)(unsafe.Pointer(header))
+	newMap := MakeNoZero(int(uintptr(l) * unsafe.Sizeof(unsafe.Pointer(nil))))
+
+	for i := range result {
+		*(*unsafe.Pointer)(unsafe.Pointer(&newMap[i])) = result[i]
+	}
+	return *(*map[K]V)(unsafe.Pointer(&newMap))
+
+}
+
 // don't forget free memory after sysalloc!!!!!!!!!
 func FreeMemory(ptr unsafe.Pointer, size uintptr) {
 	sysFree(ptr, size, nil)

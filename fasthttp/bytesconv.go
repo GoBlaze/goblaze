@@ -277,7 +277,6 @@ func writeHexInt(w *bufio.Writer, n int) error {
 	}
 
 	buf := v.([]byte)
-	defer FreeNoZero(buf)
 	i := len(buf) - 1
 	for {
 		buf[i] = lowerhex[n&0xf]
@@ -288,6 +287,7 @@ func writeHexInt(w *bufio.Writer, n int) error {
 		i--
 	}
 	_, err := w.Write(buf[i:])
+	FreeNoZero(buf)
 	hexIntBufPool.Put(v)
 	return err
 }

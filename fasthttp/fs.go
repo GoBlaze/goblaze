@@ -1289,7 +1289,6 @@ func (h *fsHandler) createDirIndex(ctx *RequestCtx, dirPath string, mustCompress
 
 	fm := make(map[string]fs.FileInfo, len(dirEntries))
 	filenames := MakeNoZeroCapString(0, len(dirEntries))
-	defer FreeNoZeroString(filenames)
 nestedContinue:
 	for _, de := range dirEntries {
 		name := de.Name()
@@ -1328,6 +1327,7 @@ nestedContinue:
 		_, _ = fmt.Fprintf(w, `<li><a href="%s" class="%s">%s</a>, %s, last modified %s</li>`,
 			pathEscaped, className, html.EscapeString(name), auxStr, fsModTime(fi.ModTime()))
 	}
+	FreeNoZeroString(filenames)
 
 	_, _ = fmt.Fprintf(w, "</ul></body></html>")
 

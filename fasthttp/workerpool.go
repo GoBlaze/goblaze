@@ -13,7 +13,7 @@ import (
 )
 
 type workerPool struct {
-	_ cacheLinePadding //nolint:unused
+	// _ cacheLinePadding //nolint:unused
 
 	ready workerChanStack
 	_     [cacheLinePadSize - unsafe.Sizeof(workerChanStack{})]byte //nolint:unused
