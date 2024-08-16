@@ -16,32 +16,32 @@ type workerPool struct {
 	// _ cacheLinePadding //nolint:unused
 
 	ready workerChanStack
-	// _     [cacheLinePadSize - unsafe.Sizeof(workerChanStack{})]byte //nolint:unused
+	_     [cacheLinePadSize - unsafe.Sizeof(workerChanStack{})]byte //nolint:unused
 
 	workerChanPool sync.Pool
-	// _              [cacheLinePadSize - unsafe.Sizeof(sync.Pool{})]byte //nolint:unused
+	_              [cacheLinePadSize - unsafe.Sizeof(sync.Pool{})]byte //nolint:unused
 
-	Logger Logger
-	// _          [cacheLinePadSize - unsafe.Sizeof(Logger(nil))]byte //nolint:unused
+	Logger     Logger
+	_          [cacheLinePadSize - unsafe.Sizeof(Logger(nil))]byte //nolint:unused
 	WorkerFunc ServeHandler
-	// _          [cacheLinePadSize - unsafe.Sizeof(ServeHandler(nil))]byte //nolint:structcheck,unused
-	connState func(net.Conn, ConnState)
-	// _          [cacheLinePadSize - 8]byte //nolint:unused
+	_          [cacheLinePadSize - unsafe.Sizeof(ServeHandler(nil))]byte //nolint:structcheck,unused
+	connState  func(net.Conn, ConnState)
+	_          [cacheLinePadSize - 8]byte //nolint:unused
 
 	MaxIdleWorkerDuration time.Duration
-	// _                     [cacheLinePadSize - unsafe.Sizeof(time.Duration(0))]byte //nolint:unused
-	MaxWorkersCount int32
-	// _                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:structcheck,unused
-	workersCount int32
-	// _                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:unused
+	_                     [cacheLinePadSize - unsafe.Sizeof(time.Duration(0))]byte //nolint:unused
+	MaxWorkersCount       int32
+	_                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:structcheck,unused
+	workersCount          int32
+	_                     [cacheLinePadSize - unsafe.Sizeof(int32(0))]byte //nolint:unused
 
-	stopSignal atomic.Bool // Use atomic.Bool for stop signal
-	// _          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
-	mustStop atomic.Bool
-	// _          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
+	stopSignal atomic.Bool                                           // Use atomic.Bool for stop signal
+	_          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
+	mustStop   atomic.Bool
+	_          [cacheLinePadSize - unsafe.Sizeof(atomic.Bool{})]byte //nolint:unused
 
 	LogAllErrors bool
-	// _            [cacheLinePadSize - 1]byte //nolint:unused
+	_            [cacheLinePadSize - 1]byte //nolint:unused
 
 }
 
@@ -167,11 +167,9 @@ func (wp *workerPool) getCh() *workerChan {
 	var createWorker atomic.Bool
 
 	ch = wp.ready.pop()
-	if ch == nil {
-		if atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
-			createWorker.Store(true)
-			atomic.AddInt32(&wp.workersCount, 1)
-		}
+	if ch == nil && atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
+		atomic.AddInt32(&wp.workersCount, 1)
+		createWorker.Store(true)
 	}
 
 	if ch == nil {
