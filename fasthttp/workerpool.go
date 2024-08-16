@@ -51,15 +51,20 @@ type workerPool struct {
 }
 
 type workerChan struct {
+	_    cacheLinePadding
 	next *workerChan
+	_    [cacheLinePadSize - 8]byte
 
 	ch *zenq.ZenQ[net.Conn]
+	_  [cacheLinePadSize - 8]byte
 
 	lastUseTime int64
+	_           [cacheLinePadSize - unsafe.Sizeof(int64(0))]byte
 }
 
 type workerChanStack struct {
 	head, tail atomic.Pointer[workerChan]
+	_          [cacheLinePadSize - (2 * unsafe.Sizeof(uintptr(0)))]byte //nolint:unused
 }
 
 func (s *workerChanStack) push(ch *workerChan) {
