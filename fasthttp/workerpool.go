@@ -12,6 +12,11 @@ import (
 	zenq "github.com/GoBlaze/goblaze/chan"
 )
 
+// workerPool serves incoming connections via a pool of workers
+// in FILO order, i.e. the most recently stopped worker will serve the next
+// incoming connection.
+//
+// Such a scheme keeps CPU caches hot (in theory).
 type workerPool struct {
 	// _ cacheLinePadding //nolint:unused
 
@@ -46,41 +51,46 @@ type workerPool struct {
 }
 
 type workerChan struct {
-	_    cacheLinePadding
 	next *workerChan
-	_    [cacheLinePadSize - 8]byte
 
-	ch          *zenq.ZenQ[net.Conn]
-	_           [cacheLinePadSize - 8]byte
+	ch *zenq.ZenQ[net.Conn]
+
 	lastUseTime int64
-	_           [cacheLinePadSize - unsafe.Sizeof(int64(0))]byte
 }
 
 type workerChanStack struct {
-	head, tail *workerChan
-	_          [cacheLinePadSize - (2 * unsafe.Sizeof(uintptr(0)))]byte //nolint:unused
+	head, tail atomic.Pointer[workerChan]
 }
 
-// push adds a workerChan to the top of the stack
 func (s *workerChanStack) push(ch *workerChan) {
-	ch.next = s.head
-	s.head = ch
-	if s.tail == nil {
-		s.tail = ch
+	for {
+		oldHead := s.head.Load()
+		ch.next = oldHead
+		if s.head.CompareAndSwap(oldHead, ch) {
+			break
+		}
+	}
+
+	if s.tail.Load() == nil {
+		s.tail.Store(ch)
+	}
+}
+func (s *workerChanStack) pop() *workerChan {
+	for {
+		oldHead := s.head.Load()
+		if oldHead == nil {
+			return nil
+		}
+
+		if s.head.CompareAndSwap(oldHead, oldHead.next) {
+			if s.head.Load() == nil {
+				s.tail.Store(nil)
+			}
+			return oldHead
+		}
 	}
 }
 
-func (s *workerChanStack) pop() *workerChan {
-	head := s.head
-	if head == nil {
-		return nil
-	}
-	s.head = head.next
-	if s.head == nil {
-		s.tail = nil
-	}
-	return head
-}
 func (wp *workerPool) Start() {
 	if wp.stopSignal.Load() {
 		return
@@ -115,7 +125,7 @@ func (wp *workerPool) Stop() {
 		if ch == nil {
 			break
 		}
-		ch.ch.Close()
+		ch.ch.Write(nil)
 	}
 
 	wp.mustStop.Store(true)
@@ -130,21 +140,23 @@ func (wp *workerPool) clean() {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
 	criticalTime := time.Now().Add(-maxIdleWorkerDuration).UnixNano()
 
-	current := wp.ready.head
-	for current != nil {
-		next := current.next
-		if current.lastUseTime < criticalTime {
-			current.ch.Close()
-			wp.workerChanPool.Put(current)
-		} else {
-			wp.ready.head = current
+	for {
+		current := wp.ready.head.Load()
+		if current == nil || current.lastUseTime >= criticalTime {
 			break
 		}
-		current = next
-	}
-	wp.ready.tail = wp.ready.head
-}
 
+		next := current.next
+		if wp.ready.head.CompareAndSwap(current, next) {
+			current.ch.Write(nil)
+			wp.workerChanPool.Put(current)
+		}
+	}
+
+	if wp.ready.head.Load() == nil {
+		wp.ready.tail.Store(nil)
+	}
+}
 func (wp *workerPool) Serve(c net.Conn) bool {
 	ch := wp.getCh()
 	if ch == nil {

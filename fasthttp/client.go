@@ -14,7 +14,6 @@ import (
 	"time"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
-	"github.com/GoBlaze/goblaze/mutex"
 )
 
 // Do performs the given http request and fills the given http response.
@@ -273,7 +272,7 @@ type Client struct {
 	// Connection pool strategy. Can be either LIFO or FIFO (default).
 	ConnPoolStrategy ConnPoolStrategyType
 
-	mLock mutex.Mutex
+	mLock sync.RWMutex
 	mOnce sync.Once
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
@@ -804,10 +803,10 @@ type HostClient struct {
 
 	connsCount int
 
-	connsLock mutex.Mutex
+	connsLock sync.Mutex
 
-	addrsLock        mutex.Mutex
-	tlsConfigMapLock mutex.Mutex
+	addrsLock        sync.Mutex
+	tlsConfigMapLock sync.Mutex
 
 	addrIdx     uint32
 	lastUseTime uint32
@@ -984,7 +983,7 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 	// concurrent requests, since timed out requests on client side
 	// usually continue execution on the host.
 
-	var mu mutex.Mutex
+	var mu sync.Mutex
 	var timedout, responded bool
 
 	go func() {
@@ -2043,7 +2042,7 @@ type wantConn struct {
 	err   error
 	ready chan struct{}
 	conn  *clientConn
-	mu    mutex.Mutex // protects conn, err, close(ready)
+	mu    sync.Mutex // protects conn, err, close(ready)
 }
 
 // waiting reports whether w is still waiting for an answer (connection or error).
@@ -2240,7 +2239,7 @@ type PipelineClient struct {
 	// By default request write timeout is unlimited.
 	WriteTimeout time.Duration
 
-	connClientsLock mutex.Mutex
+	connClientsLock sync.Mutex
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
 	// User-Agent header to be excluded from the Request.
@@ -2311,9 +2310,9 @@ type pipelineConnClient struct {
 	ReadTimeout         time.Duration
 	WriteTimeout        time.Duration
 
-	chLock mutex.Mutex
+	chLock sync.Mutex
 
-	tlsConfigLock                 mutex.Mutex
+	tlsConfigLock                 sync.Mutex
 	NoDefaultUserAgentHeader      bool
 	DialDualStack                 bool
 	DisableHeaderNamesNormalizing bool

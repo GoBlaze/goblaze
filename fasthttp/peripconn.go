@@ -4,15 +4,13 @@ import (
 	"crypto/tls"
 	"net"
 	"sync"
-
-	"github.com/GoBlaze/goblaze/mutex"
 )
 
 type perIPConnCounter struct {
 	perIPConnPool    sync.Pool
 	perIPTLSConnPool sync.Pool
 	m                map[uint32]int
-	lock             mutex.Mutex
+	lock             sync.Mutex
 }
 
 func (cc *perIPConnCounter) Register(ip uint32) int {
