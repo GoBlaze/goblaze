@@ -77,6 +77,8 @@ const (
 	// 			to gWaiting to take responsibility for ready()ing this G.
 )
 
+//go:noinline
+//go:nosplit
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
@@ -133,6 +135,8 @@ func CopyString(s string) string {
 // //go:noescape
 // func Compare(a []byte, b []byte) bool
 
+//go:noinline
+//go:nosplit
 //go:noescape
 func Contains(a, b []byte) bool
 
@@ -201,6 +205,22 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 //go:linkname sysAlloc runtime.sysAlloc
 func sysAlloc(n uintptr) unsafe.Pointer
 
+// type mutex struct {
+// 	// Futex-based impl treats it as uint32 key,
+// 	// while sema-based impl as M* waitm.
+// 	// Used to be a union, but unions break precise GC.
+// 	key uintptr
+// }
+
+// //go:linkname lock runtime.lock
+// func lock(l *mutex)
+
+// //go:linkname nanotime runtime.nanotime
+// func nanotime() int64
+
+// //go:linkname unlock runtime.unlock
+// func unlock(l *mutex)
+
 // inline is a compiler hint that tells the compiler to inline the function.
 // This can result in faster execution, but it can also increase the size of the executable.
 // The compiler is free to ignore this hint, so it should not be relied upon.
@@ -235,18 +255,27 @@ func FreeMemory(ptr unsafe.Pointer, size uintptr) {
 	sysFree(ptr, size, nil)
 }
 
+//go:noinline
+//go:nosplit
 func FreeNoZero(b []byte) {
-	if len(b) > 0 {
+	if cap(b) > 0 {
 		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
+
+		b = nil
 	}
 }
 
+//go:noinline
+//go:nosplit
 func FreeNoZeroString(strs []string) {
-	if len(strs) > 0 {
+	if cap(strs) > 0 {
 		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
+
+		strs = nil
 	}
 }
 
+//go:noinline
 //go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]

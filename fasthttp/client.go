@@ -14,6 +14,7 @@ import (
 	"time"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/GoBlaze/goblaze/mutex"
 )
 
 // Do performs the given http request and fills the given http response.
@@ -272,7 +273,7 @@ type Client struct {
 	// Connection pool strategy. Can be either LIFO or FIFO (default).
 	ConnPoolStrategy ConnPoolStrategyType
 
-	mLock sync.RWMutex
+	mLock mutex.Mutex
 	mOnce sync.Once
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
@@ -502,7 +503,7 @@ func (c *Client) Do(req *Request, resp *Response) error {
 
 	startCleaner := false
 
-	c.mLock.RLock()
+	c.mLock.Lock()
 	m := c.m
 	if isTLS {
 		m = c.ms
@@ -512,7 +513,7 @@ func (c *Client) Do(req *Request, resp *Response) error {
 		atomic.AddInt32(&hc.pendingClientRequests, 1)
 		defer atomic.AddInt32(&hc.pendingClientRequests, -1)
 	}
-	c.mLock.RUnlock()
+	c.mLock.Unlock()
 	if hc == nil {
 		c.mLock.Lock()
 		hc = m[string(host)]
@@ -574,14 +575,14 @@ func (c *Client) Do(req *Request, resp *Response) error {
 // "keep-alive" state. It does not interrupt any connections currently
 // in use.
 func (c *Client) CloseIdleConnections() {
-	c.mLock.RLock()
+	c.mLock.Lock()
 	for _, v := range c.m {
 		v.CloseIdleConnections()
 	}
 	for _, v := range c.ms {
 		v.CloseIdleConnections()
 	}
-	c.mLock.RUnlock()
+	c.mLock.Unlock()
 }
 
 func (c *Client) mCleaner(m map[string]*HostClient) {
@@ -803,10 +804,10 @@ type HostClient struct {
 
 	connsCount int
 
-	connsLock sync.Mutex
+	connsLock mutex.Mutex
 
-	addrsLock        sync.Mutex
-	tlsConfigMapLock sync.Mutex
+	addrsLock        mutex.Mutex
+	tlsConfigMapLock mutex.Mutex
 
 	addrIdx     uint32
 	lastUseTime uint32
@@ -983,7 +984,7 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 	// concurrent requests, since timed out requests on client side
 	// usually continue execution on the host.
 
-	var mu sync.Mutex
+	var mu mutex.Mutex
 	var timedout, responded bool
 
 	go func() {
@@ -2042,7 +2043,7 @@ type wantConn struct {
 	err   error
 	ready chan struct{}
 	conn  *clientConn
-	mu    sync.Mutex // protects conn, err, close(ready)
+	mu    mutex.Mutex // protects conn, err, close(ready)
 }
 
 // waiting reports whether w is still waiting for an answer (connection or error).
@@ -2239,7 +2240,7 @@ type PipelineClient struct {
 	// By default request write timeout is unlimited.
 	WriteTimeout time.Duration
 
-	connClientsLock sync.Mutex
+	connClientsLock mutex.Mutex
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
 	// User-Agent header to be excluded from the Request.
@@ -2310,9 +2311,9 @@ type pipelineConnClient struct {
 	ReadTimeout         time.Duration
 	WriteTimeout        time.Duration
 
-	chLock sync.Mutex
+	chLock mutex.Mutex
 
-	tlsConfigLock                 sync.Mutex
+	tlsConfigLock                 mutex.Mutex
 	NoDefaultUserAgentHeader      bool
 	DialDualStack                 bool
 	DisableHeaderNamesNormalizing bool

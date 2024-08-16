@@ -17,5 +17,6 @@ require (
 require golang.org/x/net v0.28.0
 
 require (
+	github.com/valyala/fasthttp v1.55.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 )

@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/GoBlaze/goblaze/mutex"
 )
 
 // BalancingClient is the interface for clients, which may be passed
@@ -49,7 +51,7 @@ type LBClient struct {
 	// DefaultLBClientTimeout is used by default.
 	Timeout time.Duration
 
-	mu sync.RWMutex
+	mu mutex.Mutex
 
 	once sync.Once
 }
@@ -128,7 +130,7 @@ func (cc *LBClient) RemoveClients(rc func(BalancingClient) bool) int {
 func (cc *LBClient) get() *lbClient {
 	cc.once.Do(cc.init)
 
-	cc.mu.RLock()
+	cc.mu.Lock()
 	cs := cc.cs
 
 	minC := cs[0]
@@ -143,7 +145,7 @@ func (cc *LBClient) get() *lbClient {
 			minT = t
 		}
 	}
-	cc.mu.RUnlock()
+	cc.mu.Unlock()
 	return minC
 }
 

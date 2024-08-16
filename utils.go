@@ -168,18 +168,27 @@ func FreeMemory(ptr unsafe.Pointer, size uintptr) {
 	sysFree(ptr, size, nil)
 }
 
+//go:noinline
+//go:nosplit
 func FreeNoZero(b []byte) {
-	if len(b) > 0 {
+	if cap(b) > 0 {
 		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
+
+		b = nil
 	}
 }
 
+//go:noinline
+//go:nosplit
 func FreeNoZeroString(strs []string) {
-	if len(strs) > 0 {
+	if cap(strs) > 0 {
 		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
+
+		strs = nil
 	}
 }
 
+//go:noinline
 //go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
@@ -309,8 +318,6 @@ func Compare(a []byte, b []byte) bool
 //go:noescape
 func Contains(a, b []byte) bool
 
-//go:noinline
-//go:nosplit
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 	converted, err := ConvertOne[TFrom, TTo](from)
 	if err != nil {

@@ -326,7 +326,6 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
-//go:nosplit
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 	// #nosec G103
@@ -334,14 +333,10 @@ func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
 
 }
 
-//go:noinline
-//go:nosplit
 func MakeNoZeroString(l int) []string {
 	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
 }
 
-//go:noinline
-//go:nosplit
 func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
@@ -361,21 +356,15 @@ func MakeNoZeroCapString(l int, c int) []string {
 // // 	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
 // // }
 
-//go:noinline
-//go:nosplit
 func Equal(a, b []byte) bool {
 	return String(a) == String(b)
 }
 
-//go:noinline
-//go:nosplit
 func isNil(v any) bool {
 
 	return reflect.ValueOf(v).IsNil()
 }
 
-//go:noinline
-//go:nosplit
 func isEqual(v1, v2 any) bool {
 	return unsafe.Pointer(&v1) == unsafe.Pointer(&v2)
 }

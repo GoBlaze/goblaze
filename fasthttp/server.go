@@ -16,6 +16,7 @@ import (
 	"time"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/GoBlaze/goblaze/mutex"
 	"github.com/GoBlaze/goblaze/tick"
 )
 
@@ -313,9 +314,9 @@ type Server struct {
 	// and accept new connections immediately).
 	SleepWhenConcurrencyLimitsExceeded time.Duration
 
-	idleConnsMu sync.Mutex
+	idleConnsMu mutex.Mutex
 
-	mu sync.Mutex
+	mu mutex.Mutex
 
 	concurrency uint32
 	open        int32
@@ -872,7 +873,7 @@ type Logger interface {
 	Printf(format string, args ...any)
 }
 
-var ctxLoggerLock sync.Mutex
+var ctxLoggerLock mutex.Mutex
 
 type ctxLogger struct {
 	ctx    *RequestCtx
