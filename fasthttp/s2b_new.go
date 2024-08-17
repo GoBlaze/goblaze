@@ -5,5 +5,9 @@ package fasthttp
 import "unsafe"
 
 func s2b(s string) []byte {
-	return unsafe.Slice(unsafe.StringData(s), len(s))
+	return *(*[]byte)(unsafe.Pointer(&struct {
+		string
+		Cap int
+	}{s, len(s)},
+	))
 }

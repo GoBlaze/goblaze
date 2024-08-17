@@ -21,39 +21,86 @@ func (err *ErrorSizeUnmatch) Error() string {
 		err.fromLength, err.fromSize, err.toSize)
 }
 
-// validatePath checks if the path starts with a '/' and panics if not.
-// It also returns the path.
-func validatePath(path string) string {
-	if len(path) == 0 || path[0] != '/' {
-		panic("path must begin with '/'")
-	}
-	return path
-}
-
-//go:noinline
-//go:nosplit
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-//go:noinline
-//go:nosplit
-func StringToBytes(s string) []byte {
-	return unsafe.Slice(unsafe.StringData(s), len(s))
+func fastPark(gp unsafe.Pointer) {
+	dropG()
+	casGStatus(gp, gRunning, gWaiting)
+	schedule()
 }
 
-//go:noinline
-//go:nosplit
+//go:linkname schedule runtime.schedule
+func schedule()
+
+//nolint:all
+const (
+	gIdle = iota
+	gRunnable
+	gRunning
+	gSyscall
+	gWaiting
+	gMoribund
+	gDead
+	gEnqueue
+	gCopyStack
+	gPreempted
+
+	// This G(goroutine)'s status.
+	//
+	// 	- gIdle: just allocated and has not yet been initialized.
+	// 	- gRunnable: in run queue. User code isn't currently executing. The stack isn't owned.
+	// 	- gRunning: goroutine may execute user code. The stack is owned by this.
+	// 			It isn't on run queue. It is assigned an M and a P (g.m and g.m.p are valid).
+	// 	- gSyscall: executing system call. It isn't executing user code. The stack is owned by this.
+	// 			It isn't on run queue. It's assigned an M.
+	// 	- gWaiting: goroutine is blocked in the runtime. It isn't executing user code.
+	// 			It isn't on run queue, but should be recorded somewhere (e.g., a channel wait queue)
+	// 			so it can be ready()d when necessary. The stack is not owned *except* that a channel
+	// 			operation may read or write parts of the stack under the appropriate channel lock.
+	// 			Otherwise, it's not safe to access the stack after a goroutine enters gWaiting
+	// 			(e.g., it may get moved).
+	// 	- gMoribund: currently unused, but hardcoded in gdb scripts.
+	// 	- gDead: currently unused. It may be just exited, on free list, or just being initialized.
+	// 			It isn't executing user code. It may or may not have a stack allocated. The G and
+	// 			its stack (if any) are owned by the M that is exiting the G or that obtained the
+	// 			G from the free list.
+	// 	- gEnqueue: currently unused
+	// 	- gCopyStack: Its stack is being moved. It isn't executing user code and isn't on run queue.
+	// 			The stack is owned by the goroutine that put it in gCopyStack.
+	// 	- gPreempted: goroutine stopped itself for a suspendG preemption. It is like gWaiting, but
+	// 			nothing is yet responsible for ready()ing it. Some suspendG must CAS the status
+	// 			to gWaiting to take responsibility for ready()ing this G.
+)
+
+func StringToBytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(&struct {
+		string
+		Cap int
+	}{s, len(s)},
+	))
+}
+
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
 }
 
-//go:noinline
-//go:nosplit
-func Copy(b []byte, b1 []byte) ([]byte, []byte) {
-	return []byte(String(b)), []byte(String(b1))
-}
+//go:linkname goReady runtime.goready
+func goReady(goroutinePtr unsafe.Pointer, traceskip int)
+
+//go:linkname mCall runtime.mcall
+func mCall(fn func(unsafe.Pointer))
+
+//go:linkname readGStatus runtime.readgstatus
+func readGStatus(gp unsafe.Pointer) uint32
+
+//go:linkname casGStatus runtime.casgstatus
+func casGStatus(gp unsafe.Pointer, oldval, newval uint32)
+
+//go:linkname dropG runtime.dropg
+func dropG()
 
 // go:nosplit is a compiler directive that tells the Go compiler to
 // prevent the function from being split into multiple machine
@@ -76,6 +123,9 @@ func CopyString(s string) string {
 	copy(c, StringToBytes(s))
 	return String(c)
 }
+
+// //go:noescape
+// func Compare(a []byte, b []byte) bool
 
 func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	var (
@@ -141,72 +191,44 @@ func sysFreeOS(v unsafe.Pointer, n uintptr)
 //go:linkname sysAlloc runtime.sysAlloc
 func sysAlloc(n uintptr) unsafe.Pointer
 
-//go:noinline
-//go:nosplit
-func MakeNoZero(l int) []byte {
-	return unsafe.Slice((*byte)(sysAlloc(uintptr(l))), l)
-
+func validatePath(path string) string {
+	if len(path) == 0 || path[0] != '/' {
+		panic("path must begin with '/'")
+	}
+	return path
 }
 
-// //go:noescape
-// func MakeNoZero(l int) []byte
+// type mutex struct {
+// 	// Futex-based impl treats it as uint32 key,
+// 	// while sema-based impl as M* waitm.
+// 	// Used to be a union, but unions break precise GC.
+// 	key uintptr
+// }
+
+// //go:linkname lock runtime.lock
+// func lock(l *mutex)
+
+// //go:linkname nanotime runtime.nanotime
+// func nanotime() int64
+
+// //go:linkname unlock runtime.unlock
+// func unlock(l *mutex)
+
+// inline is a compiler hint that tells the compiler to inline the function.
+// This can result in faster execution, but it can also increase the size of the executable.
+// The compiler is free to ignore this hint, so it should not be relied upon.
 //
-//go:noinline
-//go:nosplit
-func MakeNoZeroString(l int) []string {
-	return unsafe.Slice((*string)(sysAlloc(uintptr(l))), l)
+
+func MakeNoZero(l int) []byte {
+	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l) //  standart
+
 }
 
-//go:noinline
-//go:nosplit
-func MakeNoZeroCapString(l int, c int) []string {
-	return MakeNoZeroString(c)[:l]
-}
-
-// don't forget free memory after sysalloc!!!!!!!!!
-func FreeMemory(ptr unsafe.Pointer, size uintptr) {
-	sysFree(ptr, size, nil)
-}
-
-//go:noinline
-//go:nosplit
-func FreeNoZero(b []byte) {
-	if cap(b) > 0 {
-		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
-
-		b = nil
-	}
-}
-
-//go:noinline
-//go:nosplit
-func FreeNoZeroString(strs []string) {
-	if cap(strs) > 0 {
-		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
-
-		strs = nil
-	}
-}
-
-//go:noinline
-//go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
 
-type sliceHeader struct {
-	Data unsafe.Pointer
-	Len  int
-	Cap  int
-}
-
-func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
-	header := *(*sliceHeader)(unsafe.Pointer(&slice))
-	return header.Data
-}
-
 type StringBuffer struct {
-	_    No // nolint:structcheck
 	buf  []byte
 	addr *StringBuffer
 }
@@ -258,26 +280,26 @@ func (b *StringBuffer) Grow(n int) {
 }
 
 func (b *StringBuffer) Write(p []byte) (int, error) {
-	b.copyCheck()
+
 	b.buf = append(b.buf, p...)
 	return len(p), nil
 }
 
 func (b *StringBuffer) WriteByte(c byte) error {
-	b.copyCheck()
+
 	b.buf = append(b.buf, c)
 	return nil
 }
 
 func (b *StringBuffer) WriteRune(r rune) (int, error) {
-	b.copyCheck()
+
 	n := len(b.buf)
 	b.buf = utf8.AppendRune(b.buf, r)
 	return len(b.buf) - n, nil
 }
 
 func (b *StringBuffer) WriteString(s string) (int, error) {
-	b.copyCheck()
+
 	b.buf = append(b.buf, s...)
 	return len(s), nil
 }
@@ -312,28 +334,53 @@ func ConvertOne[TFrom, TTo any](from TFrom) (TTo, error) {
 	return value, nil
 }
 
-//go:noescape
-func Compare(a []byte, b []byte) bool
-
-//go:noescape
-func Contains(a, b []byte) bool
-
 func MustConvertOne[TFrom, TTo any](from TFrom) TTo {
-	converted, err := ConvertOne[TFrom, TTo](from)
-	if err != nil {
-		panic(err)
-	}
-	return converted
+
+	// #nosec G103
+	return *(*TTo)(unsafe.Pointer(&from))
+
 }
 
-//go:noinline
-//go:nosplit
-func isEqual(v1, v2 any) bool {
-	return reflect.ValueOf(v1).Pointer() == reflect.ValueOf(v2).Pointer()
+func MakeNoZeroString(l int) []string {
+	return unsafe.Slice((*string)(mallocgc(uintptr(l), nil, false)), l)
+}
+
+func MakeNoZeroCapString(l int, c int) []string {
+	return MakeNoZeroString(c)[:l]
+}
+
+//go:linkname memequal runtime.memequal
+func memequal(a, b unsafe.Pointer, size uintptr) bool
+
+// // func Equal(a, b []byte) bool {
+// // 	if len(a) != len(b) {
+// // 		return false
+// // 	}
+
+// // 	if len(a) == 0 {
+// // 		return true
+// // 	}
+
+// // 	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
+// // }
+
+func Equal(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
+
 }
 
 //go:noinline
 //go:nosplit
 func isNil(v any) bool {
+
 	return reflect.ValueOf(v).IsNil()
+}
+
+//go:noinline
+//go:nosplit
+func isEqual(v1, v2 any) bool {
+	return unsafe.Pointer(&v1) == unsafe.Pointer(&v2)
 }

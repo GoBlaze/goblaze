@@ -287,7 +287,7 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 		return ErrorInvalidURI
 	}
 
-	if len(host) == 0 || Contains(uri, strColonSlashSlash) {
+	if len(host) == 0 || bytes.Contains(uri, strColonSlashSlash) {
 		scheme, newHost, newURI := splitHostURI(host, uri)
 		u.SetSchemeBytes(scheme)
 		host = newHost

@@ -2,7 +2,7 @@
 #include "go_asm.h"
 
 // func bufApp(buf *[]byte, s string, w int, c byte)
-TEXT ·bufApp(SB), NOSPLIT, $0-40
+TEXT ·bufAppAsmTest(SB), NOSPLIT, $0-40
     // Load parameters
     MOVQ    buf+0(FP), BX     
     MOVQ    s_base+8(FP), SI  

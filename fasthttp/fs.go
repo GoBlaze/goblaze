@@ -1327,7 +1327,6 @@ nestedContinue:
 		_, _ = fmt.Fprintf(w, `<li><a href="%s" class="%s">%s</a>, %s, last modified %s</li>`,
 			pathEscaped, className, html.EscapeString(name), auxStr, fsModTime(fi.ModTime()))
 	}
-	FreeNoZeroString(filenames)
 
 	_, _ = fmt.Fprintf(w, "</ul></body></html>")
 

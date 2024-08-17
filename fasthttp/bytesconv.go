@@ -105,7 +105,6 @@ func ParseIPv4(dst net.IP, ipStr []byte) (net.IP, error) {
 	}
 	dst[3] = byte(v)
 
-	FreeNoZero(dst)
 	return dst, nil
 }
 
@@ -287,7 +286,7 @@ func writeHexInt(w *bufio.Writer, n int) error {
 		i--
 	}
 	_, err := w.Write(buf[i:])
-	FreeNoZero(buf)
+
 	hexIntBufPool.Put(v)
 	return err
 }

@@ -1613,7 +1613,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 			buf = append(buf, strBasicSpace...)
 			base64.StdEncoding.Encode(buf[nb:tl], buf[:nl])
 			req.Header.SetBytesKV(strAuthorization, buf[nl:tl])
-			FreeNoZero(req.Header.bufKV.value)
+
 		}
 	}
 
@@ -2335,7 +2335,7 @@ func readBodyIdentity(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, err
 
 			copy(b, dst)
 			dst = b
-			FreeNoZero(dst)
+
 		}
 	}
 }

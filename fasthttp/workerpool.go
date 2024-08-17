@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -184,11 +185,18 @@ func (wp *workerPool) getCh() *workerChan {
 	var createWorker atomic.Bool
 
 	ch = wp.ready.pop()
-	if ch == nil && atomic.LoadInt32(&wp.workersCount) < wp.MaxWorkersCount {
-		atomic.AddInt32(&wp.workersCount, 1)
-		createWorker.Store(true)
+	if ch == nil {
+		for {
+			currentworkers := atomic.LoadInt32(&wp.workersCount)
+			if currentworkers >= wp.MaxWorkersCount {
+				break
+			}
+			if atomic.CompareAndSwapInt32(&wp.workersCount, currentworkers, currentworkers+1) {
+				createWorker.Store(true)
+				break
+			}
+		}
 	}
-
 	if ch == nil {
 		vch := wp.workerChanPool.Get()
 		ch = vch.(*workerChan)
@@ -222,11 +230,11 @@ func (wp *workerPool) workerFunc(ch *workerChan) {
 		var err error
 		if err = wp.WorkerFunc(conn); err != nil && err != errHijacked {
 			errStr := err.Error()
-			if wp.LogAllErrors || !(Contains(StringToBytes(errStr), StringToBytes("broken pipe")) ||
-				Contains(StringToBytes(errStr), StringToBytes("reset by peer")) ||
-				Contains(StringToBytes(errStr), StringToBytes("request headers: small read buffer")) ||
-				Contains(StringToBytes(errStr), StringToBytes("unexpected EOF")) ||
-				Contains(StringToBytes(errStr), StringToBytes("i/o timeout")) ||
+			if wp.LogAllErrors || !(strings.Contains(errStr, "broken pipe") ||
+				strings.Contains(errStr, "reset by peer") ||
+				strings.Contains(errStr, "request headers: small read buffer") ||
+				strings.Contains(errStr, "unexpected EOF") ||
+				strings.Contains(errStr, "i/o timeout") ||
 				errors.Is(err, ErrBadTrailer)) {
 				wp.Logger.Printf("error when serving connection %q<->%q: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
 			}

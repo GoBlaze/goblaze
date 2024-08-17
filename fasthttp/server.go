@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -166,6 +167,7 @@ type Server struct {
 	//
 	// Take into account that no `panic` recovery is done by `fasthttp` (thus any `panic` will take down the entire server).
 	// Instead the user should use `recover` to handle these situations.
+	Name    string
 	Handler RequestHandler
 
 	// ErrorHandler for returning a response in case of an error while receiving or parsing the request.
@@ -227,10 +229,9 @@ type Server struct {
 	// Server name for sending in response headers.
 	//
 	// Default server name is used if left blank.
-	Name string
 
 	// We need to know our listeners and idle connections so we can close them in Shutdown().
-	ln []net.Listener
+	ln atomic.Pointer[[]net.Listener]
 
 	// The maximum number of concurrent connections the server may serve.
 	//
@@ -467,8 +468,8 @@ func TimeoutWithCodeHandler(h RequestHandler, timeout time.Duration, msg string,
 		concurrencyCh := ctx.s.concurrencyCh
 		concurrencyCh.Write(struct{}{})
 
-		ctx.timeoutCh = make(chan struct{}, 1)
-		ctx.timeoutTimer = initTimer(ctx.timeoutTimer, timeout)
+		go func() { ctx.timeoutCh = make(chan struct{}, 1) }()
+		go func() { ctx.timeoutTimer = initTimer(ctx.timeoutTimer, timeout) }()
 
 		go func() {
 			h(ctx)
@@ -1802,15 +1803,22 @@ func (s *Server) Serve(ln net.Listener) error {
 
 	maxWorkersCount := s.getConcurrency()
 
-	s.mu.Lock()
-	s.ln = append(s.ln, ln)
+	oldLns := s.ln.Load()
+	if oldLns == nil {
+
+		oldLns = &[]net.Listener{}
+	}
+
+	newLns := append(*oldLns, ln)
+
+	s.ln.Store(&newLns)
+
 	if s.done == nil {
 		s.done = zenq.New[struct{}](0)
 	}
 	if s.concurrencyCh == nil {
 		s.concurrencyCh = zenq.New[struct{}](uint32(maxWorkersCount))
 	}
-	s.mu.Unlock()
 
 	wp := &workerPool{
 		WorkerFunc:            s.serveConn,
@@ -1828,7 +1836,6 @@ func (s *Server) Serve(ln net.Listener) error {
 	// a connection Shutdown is called which reads open as 0 because it isn't
 	// incremented yet.
 	atomic.AddInt32(&s.open, 1)
-	defer atomic.AddInt32(&s.open, -1)
 
 	for {
 		c, err := acceptConn(s, ln, &lastPerIPErrorTime)
@@ -1866,6 +1873,7 @@ func (s *Server) Serve(ln net.Listener) error {
 				time.Sleep(s.SleepWhenConcurrencyLimitsExceeded)
 			}
 		}
+		atomic.AddInt32(&s.open, -1)
 	}
 }
 
@@ -1891,17 +1899,15 @@ func (s *Server) Shutdown() error {
 // ShutdownWithContext does not close keepalive connections so it's recommended to set ReadTimeout and IdleTimeout
 // to something else than 0.
 func (s *Server) ShutdownWithContext(ctx context.Context) (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	atomic.StoreInt32(&s.stop, 1)
-	defer atomic.StoreInt32(&s.stop, 0)
 
-	if s.ln == nil {
+	if ln := s.ln.Load(); len(*ln) == 0 {
 		return nil
 	}
 
-	for _, ln := range s.ln {
+	lns := s.ln.Load()
+	for _, ln := range *lns {
 		if err = ln.Close(); err != nil {
 			return err
 		}
@@ -1936,7 +1942,8 @@ END:
 	}
 
 	s.done = nil
-	s.ln = nil
+	s.ln.Store(nil)
+	atomic.StoreInt32(&s.stop, 0)
 	return err
 }
 
@@ -1949,7 +1956,7 @@ func acceptConn(s *Server, ln net.Listener, lastPerIPErrorTime *time.Time) (net.
 				time.Sleep(time.Second)
 				continue
 			}
-			if err != io.EOF && !Contains(StringToBytes(err.Error()), StringToBytes("use of closed network connection")) {
+			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				s.logger().Printf("Permanent error when accepting new connections: %v", err)
 				return nil, err
 			}

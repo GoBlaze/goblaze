@@ -218,7 +218,6 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 		builder.WriteString(method)
 	}
 
-	FreeNoZeroString(allowed)
 	return builder.String()
 }
 
@@ -645,36 +644,36 @@ func CleanPath(p string) string {
 	if buf == nil {
 		return p[:w]
 	}
-	FreeNoZero(buf)
+
 	return String(buf[:w])
 }
 
-//go:noescape
-func bufApp(buf *[]byte, s string, w int, c byte)
+// //go:noescape
+// func bufApp(buf *[]byte, s string, w int, c byte)
 
-// func bufApp(buf *[]byte, s string, w int, c byte) {
+func bufApp(buf *[]byte, s string, w int, c byte) {
 
-// 	if *buf == nil || len(*buf) <= w {
-// 		newBuf := MakeNoZero(w + 1)
+	if *buf == nil || len(*buf) <= w {
+		newBuf := MakeNoZero(w + 1)
 
-// 		if *buf == nil {
-// 			copy(newBuf, s)
-// 		} else {
-// 			copy(newBuf, *buf)
-// 		}
+		if *buf == nil {
+			copy(newBuf, s)
+		} else {
+			copy(newBuf, *buf)
+		}
 
-// 		*buf = newBuf
-// 	}
+		*buf = newBuf
+	}
 
-// 	if (*buf)[w] == c {
-// 		return
-// 	}
+	if (*buf)[w] == c {
+		return
+	}
 
-// 	if cap(*buf) <= w {
-// 		newBuf := MakeNoZero(w + 1)
-// 		copy(newBuf, *buf)
-// 		*buf = newBuf
-// 	}
+	if cap(*buf) <= w {
+		newBuf := MakeNoZero(w + 1)
+		copy(newBuf, *buf)
+		*buf = newBuf
+	}
 
-// 	(*buf)[w] = c
-// }
+	(*buf)[w] = c
+}

@@ -21,8 +21,6 @@ func (err *ErrorSizeUnmatch) Error() string {
 		err.fromLength, err.fromSize, err.toSize)
 }
 
-//go:noinline
-//go:nosplit
 func String(b []byte) string {
 
 	return unsafe.String(unsafe.SliceData(b), len(b))
@@ -77,22 +75,16 @@ const (
 	// 			to gWaiting to take responsibility for ready()ing this G.
 )
 
-//go:noinline
-//go:nosplit
 func StringToBytes(s string) []byte {
-	return unsafe.Slice(unsafe.StringData(s), len(s))
+	return *(*[]byte)(unsafe.Pointer(&struct {
+		string
+		Cap int
+	}{s, len(s)},
+	))
 }
 
-//go:noinline
-//go:nosplit
 func CopyBytes(b []byte) []byte {
 	return unsafe.Slice(unsafe.StringData(String(b)), len(b))
-}
-
-//go:noinline
-//go:nosplit
-func Copy(b []byte, b1 []byte) ([]byte, []byte) {
-	return []byte(String(b)), []byte(String(b1))
 }
 
 //go:linkname goReady runtime.goready
@@ -134,11 +126,6 @@ func CopyString(s string) string {
 
 // //go:noescape
 // func Compare(a []byte, b []byte) bool
-
-//go:noinline
-//go:nosplit
-//go:noescape
-func Contains(a, b []byte) bool
 
 func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	var (
@@ -186,7 +173,6 @@ func ConvertSlice[TFrom, TTo any](from []TFrom) ([]TTo, error) {
 	}
 }
 
-//go:noinline
 func swap[T any](a, b *T) {
 	tmp := *a
 	*a = *b
@@ -226,74 +212,16 @@ func sysAlloc(n uintptr) unsafe.Pointer
 // The compiler is free to ignore this hint, so it should not be relied upon.
 //
 
-//go:noinline
-//go:nosplit
 func MakeNoZero(l int) []byte {
-	return unsafe.Slice((*byte)(sysAlloc(uintptr(l))), l)
+	return unsafe.Slice((*byte)(mallocgc(uintptr(l), nil, false)), l) //  standart
 
 }
 
-func MakeMapNoZero[K comparable, V any](l int) map[K]V {
-	if l == 0 {
-		return nil
-	}
-	header := (*reflect.SliceHeader)(unsafe.Pointer(&l))
-	header.Len = l
-	header.Cap = l
-	result := *(*[]unsafe.Pointer)(unsafe.Pointer(header))
-	newMap := MakeNoZero(int(uintptr(l) * unsafe.Sizeof(unsafe.Pointer(nil))))
-
-	for i := range result {
-		*(*unsafe.Pointer)(unsafe.Pointer(&newMap[i])) = result[i]
-	}
-	return *(*map[K]V)(unsafe.Pointer(&newMap))
-
-}
-
-// don't forget free memory after sysalloc!!!!!!!!!
-func FreeMemory(ptr unsafe.Pointer, size uintptr) {
-	sysFree(ptr, size, nil)
-}
-
-//go:noinline
-//go:nosplit
-func FreeNoZero(b []byte) {
-	if cap(b) > 0 {
-		sysFree(unsafe.Pointer(&b[0]), uintptr(cap(b)), nil)
-
-		b = nil
-	}
-}
-
-//go:noinline
-//go:nosplit
-func FreeNoZeroString(strs []string) {
-	if cap(strs) > 0 {
-		sysFree(unsafe.Pointer(&strs[0]), uintptr(cap(strs))*unsafe.Sizeof(strs[0]), nil)
-
-		strs = nil
-	}
-}
-
-//go:noinline
-//go:nosplit
 func MakeNoZeroCap(l int, c int) []byte {
 	return MakeNoZero(c)[:l]
 }
 
-type sliceHeader struct {
-	Data unsafe.Pointer
-	Len  int
-	Cap  int
-}
-
-func SliceUnsafePointer[T any](slice []T) unsafe.Pointer {
-	header := *(*sliceHeader)(unsafe.Pointer(&slice))
-	return header.Data
-}
-
 type StringBuffer struct {
-	_    noCopy // nolint:structcheck
 	buf  []byte
 	addr *StringBuffer
 }
@@ -345,26 +273,26 @@ func (b *StringBuffer) Grow(n int) {
 }
 
 func (b *StringBuffer) Write(p []byte) (int, error) {
-	b.copyCheck()
+
 	b.buf = append(b.buf, p...)
 	return len(p), nil
 }
 
 func (b *StringBuffer) WriteByte(c byte) error {
-	b.copyCheck()
+
 	b.buf = append(b.buf, c)
 	return nil
 }
 
 func (b *StringBuffer) WriteRune(r rune) (int, error) {
-	b.copyCheck()
+
 	n := len(b.buf)
 	b.buf = utf8.AppendRune(b.buf, r)
 	return len(b.buf) - n, nil
 }
 
 func (b *StringBuffer) WriteString(s string) (int, error) {
-	b.copyCheck()
+
 	b.buf = append(b.buf, s...)
 	return len(s), nil
 }
@@ -414,8 +342,8 @@ func MakeNoZeroCapString(l int, c int) []string {
 	return MakeNoZeroString(c)[:l]
 }
 
-// //go:linkname memequal runtime.memequal
-// func memequal(a, b unsafe.Pointer, size uintptr) bool
+//go:linkname memequal runtime.memequal
+func memequal(a, b unsafe.Pointer, size uintptr) bool
 
 // // func Equal(a, b []byte) bool {
 // // 	if len(a) != len(b) {
@@ -430,7 +358,11 @@ func MakeNoZeroCapString(l int, c int) []string {
 // // }
 
 func Equal(a, b []byte) bool {
-	return String(a) == String(b)
+	if len(a) != len(b) {
+		return false
+	}
+	return memequal(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), uintptr(len(a)))
+
 }
 
 //go:noinline

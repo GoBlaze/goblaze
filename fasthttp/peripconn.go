@@ -128,6 +128,6 @@ func uint322ip(ip uint32) net.IP {
 	b[1] = byte(ip >> 16)
 	b[2] = byte(ip >> 8)
 	b[3] = byte(ip)
-	FreeNoZero(b)
+
 	return b
 }
