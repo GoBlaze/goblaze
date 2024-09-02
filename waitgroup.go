@@ -7,14 +7,14 @@ import (
 )
 
 var waitGroupPool = pool.NewPool[sync.WaitGroup](func() *sync.WaitGroup {
-	return new(sync.WaitGroup)
+	return &sync.WaitGroup{}
 }, nil)
 
-func AcquireWaitGroup() *sync.WaitGroup {
+func Get() *sync.WaitGroup {
 	return waitGroupPool.Get()
 }
 
-func ReleaseWaitGroup(wg *sync.WaitGroup) {
+func Put(wg *sync.WaitGroup) {
 	Reset()
 	waitGroupPool.Put(wg)
 

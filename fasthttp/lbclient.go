@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/NikoMalik/mutex"
 )
 
 // BalancingClient is the interface for clients, which may be passed
@@ -49,7 +51,7 @@ type LBClient struct {
 	// DefaultLBClientTimeout is used by default.
 	Timeout time.Duration
 
-	mu sync.Mutex
+	mu mutex.MutexExp
 
 	once sync.Once
 }

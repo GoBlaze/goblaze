@@ -18,6 +18,7 @@ import (
 
 	zenq "github.com/GoBlaze/goblaze/chan"
 	"github.com/GoBlaze/goblaze/tick"
+	"github.com/NikoMalik/mutex"
 )
 
 var errNoCertOrKeyProvided = errors.New("cert or key has not provided")
@@ -112,6 +113,7 @@ func ListenAndServeUNIX(addr string, mode os.FileMode, handler RequestHandler) e
 // certFile and keyFile are paths to TLS certificate and key files.
 func ListenAndServeTLS(addr, certFile, keyFile string, handler RequestHandler) error {
 	s := &Server{
+
 		Handler: handler,
 	}
 	return s.ListenAndServeTLS(addr, certFile, keyFile)
@@ -314,9 +316,9 @@ type Server struct {
 	// and accept new connections immediately).
 	SleepWhenConcurrencyLimitsExceeded time.Duration
 
-	idleConnsMu sync.RWMutex
+	idleConnsMu mutex.MutexExp
 
-	mu sync.Mutex
+	mu mutex.MutexExp
 
 	concurrency uint32
 	open        int32
@@ -873,7 +875,7 @@ type Logger interface {
 	Printf(format string, args ...any)
 }
 
-var ctxLoggerLock sync.Mutex
+var ctxLoggerLock mutex.MutexExp
 
 type ctxLogger struct {
 	ctx    *RequestCtx

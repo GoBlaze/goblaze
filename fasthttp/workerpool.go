@@ -64,8 +64,8 @@ type workerChan struct {
 }
 
 type workerChanStack struct {
-	head, tail atomic.Pointer[workerChan]
-	_          [cacheLinePadSize - (2 * unsafe.Sizeof(uintptr(0)))]byte //nolint:unused
+	head atomic.Pointer[workerChan]
+	_    [cacheLinePadSize - (2 * unsafe.Sizeof(uintptr(0)))]byte //nolint:unused
 }
 
 func (s *workerChanStack) push(ch *workerChan) {
@@ -76,10 +76,6 @@ func (s *workerChanStack) push(ch *workerChan) {
 			break
 		}
 	}
-
-	if s.tail.Load() == nil {
-		s.tail.Store(ch)
-	}
 }
 func (s *workerChanStack) pop() *workerChan {
 	for {
@@ -89,9 +85,6 @@ func (s *workerChanStack) pop() *workerChan {
 		}
 
 		if s.head.CompareAndSwap(oldHead, oldHead.next) {
-			if s.head.Load() == nil {
-				s.tail.Store(nil)
-			}
 			return oldHead
 		}
 	}
@@ -148,7 +141,7 @@ func (wp *workerPool) clean() {
 
 	for {
 		current := wp.ready.head.Load()
-		if current == nil || current.lastUseTime >= criticalTime {
+		if current == nil || atomic.LoadInt64(&current.lastUseTime) >= criticalTime {
 			break
 		}
 
@@ -158,11 +151,8 @@ func (wp *workerPool) clean() {
 			wp.workerChanPool.Put(current)
 		}
 	}
-
-	if wp.ready.head.Load() == nil {
-		wp.ready.tail.Store(nil)
-	}
 }
+
 func (wp *workerPool) Serve(c net.Conn) bool {
 	ch := wp.getCh()
 	if ch == nil {
@@ -181,39 +171,30 @@ var workerChanCap = func() uint32 {
 }()
 
 func (wp *workerPool) getCh() *workerChan {
-	var ch *workerChan
-	var createWorker atomic.Bool
+	for {
+		ch := wp.ready.pop()
+		if ch != nil {
+			return ch
+		}
 
-	ch = wp.ready.pop()
-	if ch == nil {
-		for {
-			currentworkers := atomic.LoadInt32(&wp.workersCount)
-			if currentworkers >= wp.MaxWorkersCount {
-				break
+		currentWorkers := atomic.LoadInt32(&wp.workersCount)
+		if currentWorkers < int32(wp.MaxWorkersCount) {
+			if atomic.CompareAndSwapInt32(&wp.workersCount, currentWorkers, currentWorkers+1) {
+				ch = wp.workerChanPool.Get().(*workerChan)
+				go wp.workerFunc(ch)
+				return ch
 			}
-			if atomic.CompareAndSwapInt32(&wp.workersCount, currentworkers, currentworkers+1) {
-				createWorker.Store(true)
-				break
-			}
+		} else {
+			break
 		}
 	}
-	if ch == nil {
-		vch := wp.workerChanPool.Get()
-		ch = vch.(*workerChan)
-		go func() {
-			wp.workerFunc(ch)
-			wp.workerChanPool.Put(vch)
-		}()
-	}
-	return ch
+	return nil
 }
-
 func (wp *workerPool) release(ch *workerChan) bool {
-	ch.lastUseTime = time.Now().UnixNano()
+	atomic.StoreInt64(&ch.lastUseTime, time.Now().UnixNano())
 	if wp.mustStop.Load() {
 		return false
 	}
-
 	wp.ready.push(ch)
 	return true
 }

@@ -18,6 +18,7 @@ import (
 
 	zenq "github.com/GoBlaze/goblaze/chan"
 	"github.com/GoBlaze/goblaze/tick"
+	"github.com/NikoMalik/mutex"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
@@ -538,7 +539,7 @@ type fsFile struct {
 	contentLength int
 	readersCount  int32
 
-	bigFilesLock sync.Mutex
+	bigFilesLock mutex.MutexExp
 	compressed   bool
 }
 
@@ -829,7 +830,7 @@ func newCacheManager(fs *FS) cacheManager {
 }
 
 type noopCacheManager struct {
-	cacheLock sync.Mutex
+	cacheLock mutex.MutexExp
 }
 
 func (n *noopCacheManager) WithLock(work func()) {
@@ -853,7 +854,7 @@ type inMemoryCacheManager struct {
 	cacheBrotli   map[string]*fsFile
 	cacheGzip     map[string]*fsFile
 	cacheDuration time.Duration
-	cacheLock     sync.Mutex
+	cacheLock     mutex.MutexExp
 }
 
 func (cm *inMemoryCacheManager) WithLock(work func()) {
@@ -1760,9 +1761,9 @@ func fsModTime(t time.Time) time.Time {
 
 var filesLockMap sync.Map
 
-func getFileLock(absPath string) *sync.Mutex {
-	v, _ := filesLockMap.LoadOrStore(absPath, &sync.Mutex{})
-	filelock := v.(*sync.Mutex)
+func getFileLock(absPath string) *mutex.MutexExp {
+	v, _ := filesLockMap.LoadOrStore(absPath, &mutex.MutexExp{})
+	filelock := v.(*mutex.MutexExp)
 	return filelock
 }
 

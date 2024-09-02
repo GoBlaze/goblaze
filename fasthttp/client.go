@@ -14,6 +14,7 @@ import (
 	"time"
 
 	zenq "github.com/GoBlaze/goblaze/chan"
+	"github.com/NikoMalik/mutex"
 )
 
 // Do performs the given http request and fills the given http response.
@@ -272,7 +273,7 @@ type Client struct {
 	// Connection pool strategy. Can be either LIFO or FIFO (default).
 	ConnPoolStrategy ConnPoolStrategyType
 
-	mLock sync.RWMutex
+	mLock mutex.MutexExp
 	mOnce sync.Once
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
@@ -803,10 +804,10 @@ type HostClient struct {
 
 	connsCount int
 
-	connsLock sync.Mutex
+	connsLock mutex.MutexExp
 
-	addrsLock        sync.Mutex
-	tlsConfigMapLock sync.Mutex
+	addrsLock        mutex.MutexExp
+	tlsConfigMapLock mutex.MutexExp
 
 	addrIdx     uint32
 	lastUseTime uint32
@@ -983,7 +984,7 @@ func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDo
 	// concurrent requests, since timed out requests on client side
 	// usually continue execution on the host.
 
-	var mu sync.Mutex
+	var mu mutex.MutexExp
 	var timedout, responded bool
 
 	go func() {
@@ -2042,7 +2043,7 @@ type wantConn struct {
 	err   error
 	ready chan struct{}
 	conn  *clientConn
-	mu    sync.Mutex // protects conn, err, close(ready)
+	mu    mutex.MutexExp // protects conn, err, close(ready)
 }
 
 // waiting reports whether w is still waiting for an answer (connection or error).
@@ -2239,7 +2240,7 @@ type PipelineClient struct {
 	// By default request write timeout is unlimited.
 	WriteTimeout time.Duration
 
-	connClientsLock sync.Mutex
+	connClientsLock mutex.MutexExp
 
 	// NoDefaultUserAgentHeader when set to true, causes the default
 	// User-Agent header to be excluded from the Request.
@@ -2310,9 +2311,9 @@ type pipelineConnClient struct {
 	ReadTimeout         time.Duration
 	WriteTimeout        time.Duration
 
-	chLock sync.Mutex
+	chLock mutex.MutexExp
 
-	tlsConfigLock                 sync.Mutex
+	tlsConfigLock                 mutex.MutexExp
 	NoDefaultUserAgentHeader      bool
 	DialDualStack                 bool
 	DisableHeaderNamesNormalizing bool
